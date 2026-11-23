@@ -3,12 +3,17 @@ from pydantic import BaseModel
 
 class HealthResponse(BaseModel):
     status: str = "healthy"
+    degraded: bool = False
     version: str
     environment: str
     database: str
     vector_store: str
     storage_writable: bool
+    bge_m3: Optional[Dict[str, Any]] = None
+    nli_verifier: Optional[Dict[str, Any]] = None
+    tesseract: Optional[Dict[str, Any]] = None
     llm: Optional[Dict[str, Any]] = None
+    fallback_modes: List[str] = []
 
 class LLMHealthResponse(BaseModel):
     provider: str

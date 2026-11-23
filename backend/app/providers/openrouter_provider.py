@@ -58,7 +58,7 @@ class OpenRouterProvider(BaseLLMProvider):
         prompt: str,
         system_prompt: str,
         temperature: float = 0.2,
-        max_tokens: int = 2000,
+        max_tokens: int = 5000,
         **kwargs
     ) -> LLMResponse:
         """
@@ -81,6 +81,9 @@ class OpenRouterProvider(BaseLLMProvider):
             {"role": "user", "content": prompt}
         ]
 
+        # Ensure adequate token budget for Nemotron's reasoning + JSON output
+        eff_max_tokens = max(max_tokens or 5000, 5000)
+
         attempt = 0
         backoff_delays = [1.0, 2.0, 4.0]
         last_error = None
@@ -92,7 +95,9 @@ class OpenRouterProvider(BaseLLMProvider):
                     model=self.model,
                     messages=messages,
                     temperature=temperature,
-                    max_tokens=max_tokens,
+                    max_tokens=eff_max_tokens,
+                    response_format={"type": "json_object"},
+                    extra_body={"reasoning": {"max_tokens": 1500}},
                     stream=False
                 )
 

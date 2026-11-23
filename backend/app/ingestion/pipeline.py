@@ -44,7 +44,8 @@ async def run_document_ingestion_pipeline(document_id: str, db: AsyncSession) ->
     for p in parsed_pages:
         # Render page image
         try:
-            rendered_path = render_pdf_page_image(file_path, p.page_number)
+            render_res = render_pdf_page_image(file_path, p.page_number)
+            rendered_path = render_res[0] if isinstance(render_res, tuple) else render_res
         except Exception:
             rendered_path = None
 
@@ -91,6 +92,30 @@ async def run_document_ingestion_pipeline(document_id: str, db: AsyncSession) ->
 
     doc.status = "PROCESSED"
     await db.commit()
+
+    # 6. Index Clauses into Qdrant Vector Store using BGE-M3 dense embeddings
+    try:
+        from app.retrieval.vector_store import index_clauses_in_qdrant
+        clauses_payload = []
+        for c in clauses:
+            clauses_payload.append({
+                "clause_id": c.get("id"),
+                "document_id": doc.id,
+                "document_name": doc.name,
+                "clause_number": c.get("clause_number"),
+                "section_title": c.get("section_title"),
+                "clause_text": c.get("clause_text", ""),
+                "page_number": c.get("page_number", 1),
+                "bounding_box": c.get("bounding_box"),
+                "doc_type": doc.document_type,
+                "effective_from": str(doc.effective_from or ""),
+                "status": doc.doc_status or "IN_FORCE",
+                "source_sha256": doc.file_hash
+            })
+        index_clauses_in_qdrant(clauses_payload)
+    except Exception as e:
+        import logging
+        logging.getLogger("veritas.ingestion").error(f"Failed to index clauses in Qdrant: {e}")
 
     return {
         "document_id": doc.id,
