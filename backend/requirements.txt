@@ -20,3 +20,5 @@ rank-bm25>=0.2.2
 reportlab>=4.1.0
 pillow>=10.2.0
 sentence-transformers>=2.5.1
+pytesseract>=0.3.10
+openai>=1.14.0

@@ -5,10 +5,22 @@ from sqlalchemy import select, func
 from app.core.config import settings
 from app.database.session import get_db
 from app.database.models import Document, Clause, AmendmentEdge, Conflict
-from app.schemas.system import HealthResponse, AnalyticsResponse
+from app.schemas.system import HealthResponse, AnalyticsResponse, LLMHealthResponse
 from app.retrieval.vector_store import get_qdrant_client
 
 router = APIRouter(tags=["System"])
+
+@router.get("/health/llm", response_model=LLMHealthResponse)
+async def get_llm_health(check_connectivity: bool = False):
+    """
+    Dedicated LLM provider health check.
+    Reports configured provider, model, API key presence, and optional connectivity.
+    Never exposes API keys or burns generation tokens on ordinary health checks.
+    """
+    from app.providers.provider_factory import get_llm_provider
+    provider = get_llm_provider()
+    res = await provider.check_health(check_connectivity=check_connectivity)
+    return LLMHealthResponse(**res)
 
 @router.get("/health", response_model=HealthResponse)
 async def get_health(db: AsyncSession = Depends(get_db)):
@@ -27,13 +39,18 @@ async def get_health(db: AsyncSession = Depends(get_db)):
 
     storage_writable = os.access(settings.UPLOAD_DIR, os.W_OK) and os.access(settings.RENDERED_DIR, os.W_OK)
 
+    from app.providers.provider_factory import get_llm_provider
+    provider = get_llm_provider()
+    llm_info = await provider.check_health(check_connectivity=False)
+
     return HealthResponse(
         status="healthy" if db_status == "connected" else "degraded",
         version=settings.VERSION,
         environment=settings.ENVIRONMENT,
         database=db_status,
         vector_store=qdrant_status,
-        storage_writable=storage_writable
+        storage_writable=storage_writable,
+        llm=llm_info
     )
 
 @router.get("/analytics", response_model=AnalyticsResponse)

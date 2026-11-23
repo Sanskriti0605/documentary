@@ -273,7 +273,11 @@ export const EvidenceChat: React.FC = () => {
               ) : (
                 <span data-testid="llm-mode-badge" className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-xs font-semibold">
                   <Cpu className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Ollama ({response.model_name || 'qwen2.5:7b'})</span>
+                  <span>
+                    {response.generation_provider?.toLowerCase().includes('openrouter') || response.model_name?.includes('nemotron')
+                      ? 'OpenRouter (NVIDIA Nemotron 3.5 Lightning)'
+                      : (response.generation_provider || `Model (${response.model_name || 'NVIDIA Nemotron 3.5 Lightning'})`)}
+                  </span>
                 </span>
               )}
             </div>

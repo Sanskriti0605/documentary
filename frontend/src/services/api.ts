@@ -27,6 +27,10 @@ export const systemService = {
     const res = await api.get<SystemHealth>('/health');
     return res.data;
   },
+  getLLMHealth: async (checkConnectivity: boolean = false): Promise<any> => {
+    const res = await api.get<any>(`/health/llm?check_connectivity=${checkConnectivity}`);
+    return res.data;
+  },
   getAnalytics: async (): Promise<AnalyticsStats> => {
     const res = await api.get<AnalyticsStats>('/analytics');
     return res.data;

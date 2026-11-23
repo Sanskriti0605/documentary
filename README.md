@@ -46,7 +46,7 @@ flowchart TD
 | **Parsing** | `PyMuPDF` (`fitz`) + `pdfplumber` | `1.23.26` / `0.11.0` | **Real** | Extracts text spans with pixel bounding boxes `[x0, y0, x1, y1]`, tables as structured rows |
 | **Keyword Search** | `BM25Okapi` (`rank-bm25`) | `0.2.2` | **Real** | Sparse lexical keyword scoring on tokenized clause corpus |
 | **Dense Retrieval** | Dense Token Intersect / `Qdrant` | `qdrant-client 1.8.0` | **Hybrid** | In-memory token overlap merged via Reciprocal Rank Fusion ($k=60$) |
-| **Generation** | Ollama (`qwen2.5:1.5b` / `qwen2.5:7b`) | `0.3.x` | **Real** | When Ollama is offline, switches to deterministic extractive grounding and labels `is_fallback: true` |
+| **Generation** | **OpenRouter** (`nvidia/nemotron-3.5-lightning:free`) / Local Ollama fallback | `OpenAI SDK 1.14+` | **Real** | Primary generation via OpenRouter; if offline or unconfigured, switches to deterministic extractive grounding and flags `is_fallback: true` |
 | **NLI Verification Gate** | `cross-encoder/nli-deberta-v3-small` | Hugging Face Hub | **Real** | Evaluates premise-hypothesis entailment; reports active verifier and probabilities per claim |
 | **Calculations** | Python `decimal.Decimal` | PSF | **Real** | Deterministic reducing-balance EMI, RBI non-capitalized penal charges, and fees + 18% GST |
 | **PDF Rendering** | `PyMuPDF` | `1.23.26` | **Real** | Dynamic high-res PNG page rendering with semi-transparent yellow highlight overlays |
@@ -125,7 +125,51 @@ Open **`http://localhost:5173`** in your browser.
 
 ---
 
-## 5. REST API Reference
+## 5. OpenRouter & LLM Provider Configuration
+
+VERITAS AI uses **OpenRouter** with **NVIDIA Nemotron 3.5 Lightning (Free)** as its primary LLM provider while retaining local **Ollama** as an offline fallback.
+
+### 1. Create an OpenRouter Account & Generate API Key
+1. Sign up for an account at [https://openrouter.ai](https://openrouter.ai).
+2. Navigate to [https://openrouter.ai/keys](https://openrouter.ai/keys).
+3. Create a new key (e.g. `veritas-ai-key`).
+4. Copy your key (`sk-or-v1-...`).
+
+### 2. Configure Environment (`.env`)
+In your project root, add your OpenRouter key to `.env`:
+```env
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-your-actual-key-here
+OPENROUTER_MODEL=nvidia/nemotron-3.5-lightning:free
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+```
+
+### 3. Verify Live Connectivity
+Run the included verification script:
+```bash
+python scripts/test_openrouter_live.py
+```
+Or check the dedicated health check endpoint:
+```bash
+curl "http://localhost:8001/api/health/llm?check_connectivity=true"
+```
+
+### 4. Switching Providers or Models Later
+* **Change Model on OpenRouter:** Update `OPENROUTER_MODEL` in `.env` (e.g. `meta-llama/llama-3.3-70b-instruct:free` or `google/gemini-2.0-flash-exp:free`).
+* **Switch back to Local Ollama:** Set `LLM_PROVIDER=ollama` in `.env`. The backend will automatically route queries to `OLLAMA_BASE_URL` (`http://localhost:11434`) targeting `OLLAMA_MODEL` (`qwen2.5:7b`).
+
+### 5. Rate Limits & Free Inference Availability
+* The `nvidia/nemotron-3.5-lightning:free` endpoint is provided by OpenRouter with standard free-tier rate limits (~20 requests/minute).
+* The provider layer includes automatic exponential backoff retry logic (1s, 2s, 4s) for HTTP 429 rate limits and 5xx upstream service errors.
+* If rate limits or timeouts occur, VERITAS AI automatically falls back to deterministic rule-based extractive grounding and labels `is_fallback: true` with a clear explanation.
+
+### 6. Privacy & Security Guidance
+* OpenRouter free endpoints process and log data according to provider policies.
+* **Important:** Use synthetic or non-confidential test documents when evaluating the free tier. Do not transmit actual customer PII, unmasked PAN/Aadhaar numbers, bank account numbers, or confidential internal policy drafts without an approved security review.
+
+---
+
+## 6. REST API Reference
 
 - `POST /documents/upload`: Upload PDF documents with automatic parsing, bounding box extraction, and table detection.
 - `GET /documents`: List ingested documents with page counts, clause counts, and processing status.

@@ -307,6 +307,27 @@ export interface SystemHealth {
   database: string;
   vector_store: string;
   storage_writable: boolean;
+  llm?: {
+    provider: string;
+    model: string;
+    base_url: string;
+    api_key_configured: boolean;
+    api_key_status: string;
+    status: string;
+    details: string;
+    reachable?: boolean;
+  };
+}
+
+export interface LLMHealth {
+  provider: string;
+  model: string;
+  base_url: string;
+  api_key_configured: boolean;
+  api_key_status: string;
+  status: string;
+  details: string;
+  reachable?: boolean;
 }
 
 export interface AskResponse {

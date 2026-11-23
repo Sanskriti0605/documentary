@@ -8,6 +8,17 @@ class HealthResponse(BaseModel):
     database: str
     vector_store: str
     storage_writable: bool
+    llm: Optional[Dict[str, Any]] = None
+
+class LLMHealthResponse(BaseModel):
+    provider: str
+    model: str
+    base_url: str
+    api_key_configured: bool
+    api_key_status: str
+    status: str
+    details: str
+    reachable: Optional[bool] = None
 
 class AnalyticsResponse(BaseModel):
     total_documents: int

@@ -1,61 +1,95 @@
-version: '3.8'
-
 services:
+  # -------------------------------------------------------------
+  # Ollama LLM Runtime
+  # -------------------------------------------------------------
   ollama:
     image: ollama/ollama:latest
     container_name: verifydoc-ollama
-    ports:
-      - "11434:11434"
     volumes:
-      - ollama-models:/root/.ollama
+      - ollama_data:/root/.ollama
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/version || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # Optional NVIDIA GPU acceleration (uncomment if NVIDIA GPU runtime is available)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
 
-  ollama-pull:
+  # -------------------------------------------------------------
+  # Ollama Model Initialization (One-shot Model Pull)
+  # -------------------------------------------------------------
+  ollama-init:
     image: ollama/ollama:latest
-    container_name: verifydoc-ollama-pull
-    depends_on:
-      - ollama
-    volumes:
-      - ollama-models:/root/.ollama
-    entrypoint: /bin/sh
-    command:
-      - "-c"
-      - "echo 'Waiting for Ollama service...' && sleep 3 && while ! ollama list > /dev/null 2>&1; do sleep 2; done && echo 'Pulling qwen2.5:1.5b...' && ollama pull qwen2.5:1.5b && echo 'Ollama model ready!'"
+    container_name: verifydoc-ollama-init
     restart: "no"
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull ${OLLAMA_MODEL:-qwen2.5:7b}"]
 
+  # -------------------------------------------------------------
+  # VerifyDoc FastAPI Backend
+  # -------------------------------------------------------------
   backend:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: verifydoc-backend
-    ports:
-      - "8001:8001"
-    volumes:
-      - verifydoc-data:/app/storage
-      - hf-cache:/root/.cache/huggingface
+    env_file: .env
     environment:
-      - VERITAS_PORT=8001
-      - VERITAS_HOST=0.0.0.0
-      - AI_PROVIDER=ollama
+      - HF_HOME=/models/hf
+      - STORAGE_DIR=/app/storage
+      - UPLOAD_DIR=/app/storage/uploads
+      - RENDERED_DIR=/app/storage/rendered
+      - QDRANT_STORAGE_PATH=/app/storage/qdrant
+      - DATABASE_URL=sqlite+aiosqlite:////app/storage/db/veritas.db
+      - SYNC_DATABASE_URL=sqlite:////app/storage/db/veritas.db
       - OLLAMA_BASE_URL=http://ollama:11434
-      - GENERATION_MODEL=qwen2.5:1.5b
-      - NLI_MODEL=cross-encoder/nli-deberta-v3-small
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
+      - PORT=8000
+      - HOST=0.0.0.0
+    volumes:
+      - ./storage:/app/storage
+      - hf_cache:/models/hf
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
     restart: unless-stopped
 
+  # -------------------------------------------------------------
+  # VerifyDoc React 18 + Vite Frontend (Nginx Reverse Proxy)
+  # -------------------------------------------------------------
   frontend:
     build:
-      context: .
-      dockerfile: frontend/Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE=/api
     container_name: verifydoc-frontend
     ports:
-      - "5173:80"
+      - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  verifydoc-data:
-  ollama-models:
-  hf-cache:
+  ollama_data:
+  hf_cache:
