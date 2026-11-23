@@ -27,6 +27,7 @@ class ClauseResponse(BaseModel):
     effective_from: Optional[date] = None
     effective_to: Optional[date] = None
     bounding_box: Optional[List[float]] = None
+    page_number: Optional[int] = 1
 
 class DocumentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

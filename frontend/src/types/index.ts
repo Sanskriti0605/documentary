@@ -47,6 +47,7 @@ export interface ClauseItem {
   id: string;
   document_id: string;
   page_id: string;
+  page_number?: number;
   parent_clause_id?: string;
   clause_number?: string;
   section_title?: string;

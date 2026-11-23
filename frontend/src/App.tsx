@@ -8,11 +8,13 @@ import { ContradictionCentre } from './pages/ContradictionCentre';
 import { AmendmentExplorer } from './pages/AmendmentExplorer';
 import { PdfViewerPage } from './pages/PdfViewerPage';
 import { EvaluationPage } from './pages/EvaluationPage';
+import { CertificateVerificationPage } from './pages/CertificateVerificationPage';
 
 export const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/verify/clause/:clauseId" element={<CertificateVerificationPage />} />
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="documents" element={<DocumentLibrary />} />
