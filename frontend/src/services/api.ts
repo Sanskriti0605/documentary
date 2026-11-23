@@ -9,7 +9,9 @@ import {
   SystemHealth,
   ClauseItem,
   AskResponse,
-  EvalBenchmarkResponse
+  EvalBenchmarkResponse,
+  ConflictSummaryStats,
+  ConflictScanResponse
 } from '../types';
 
 export const api = axios.create({
@@ -73,16 +75,56 @@ export const askService = {
 };
 
 export const conflictService = {
-  listConflicts: async (status?: string): Promise<{ total: number; conflicts: ConflictItem[] }> => {
-    const params = status ? { resolution_status: status } : {};
-    const res = await api.get<{ total: number; conflicts: ConflictItem[] }>('/conflicts', { params });
+  listConflicts: async (filters?: {
+    status?: string;
+    subject?: string;
+    document?: string;
+    conflict_type?: string;
+    resolution_status?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ total: number; conflicts: ConflictItem[]; summary?: ConflictSummaryStats }> => {
+    const params: Record<string, any> = {};
+    if (filters) {
+      if (filters.resolution_status || filters.status) {
+        params.resolution_status = filters.resolution_status || filters.status;
+      }
+      if (filters.subject) params.subject = filters.subject;
+      if (filters.document) params.document = filters.document;
+      if (filters.conflict_type) params.conflict_type = filters.conflict_type;
+      if (filters.skip !== undefined) params.skip = filters.skip;
+      if (filters.limit !== undefined) params.limit = filters.limit;
+    }
+    const res = await api.get<{ total: number; conflicts: ConflictItem[]; summary?: ConflictSummaryStats }>('/conflicts', { params });
     return res.data;
   },
-  reviewConflict: async (id: string, resolutionStatus: string, notes: string): Promise<Conflict> => {
-    const res = await api.post<Conflict>(`/conflicts/${id}/review`, {
+  patchConflict: async (
+    id: string,
+    data: {
+      resolution_status: string;
+      resolution_notes: string;
+      linked_document_id?: string;
+      linked_document_name?: string;
+    }
+  ): Promise<Conflict> => {
+    const res = await api.patch<Conflict>(`/conflicts/${id}`, data);
+    return res.data;
+  },
+  reviewConflict: async (
+    id: string,
+    resolutionStatus: string,
+    notes: string,
+    linkedDocName?: string
+  ): Promise<Conflict> => {
+    const res = await api.patch<Conflict>(`/conflicts/${id}`, {
       resolution_status: resolutionStatus,
       resolution_notes: notes,
+      linked_document_name: linkedDocName,
     });
+    return res.data;
+  },
+  scanConflicts: async (): Promise<ConflictScanResponse> => {
+    const res = await api.post<ConflictScanResponse>('/conflicts/scan');
     return res.data;
   },
 };

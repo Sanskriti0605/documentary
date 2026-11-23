@@ -134,9 +134,16 @@ class Conflict(Base):
     severity = Column(String(32), nullable=False, default="MEDIUM") # LOW, MEDIUM, HIGH, CRITICAL
     scope_overlap = Column(Boolean, default=True, nullable=False)
     temporal_overlap = Column(Boolean, default=True, nullable=False)
-    resolution_status = Column(String(32), nullable=False, default="PENDING_REVIEW") # PENDING_REVIEW, RESOLVED_AMENDMENT, RESOLVED_SCOPE, DISMISSED
+    resolution_status = Column(String(32), nullable=False, default="PENDING_REVIEW") # PENDING_REVIEW, RESOLVED_AMENDMENT, RESOLVED_SCOPE, DISMISSED, AUTO_RESOLVED
     resolution_notes = Column(Text, nullable=True)
+    subject = Column(String(128), nullable=True, index=True)
+    value_a = Column(String(255), nullable=True)
+    value_b = Column(String(255), nullable=True)
+    linked_document_id = Column(String(36), nullable=True)
+    linked_document_name = Column(String(255), nullable=True)
+    history = Column(Text, nullable=True, default="[]") # JSON string of review audit log
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     clause_a = relationship("Clause", foreign_keys=[clause_a_id])
     clause_b = relationship("Clause", foreign_keys=[clause_b_id])

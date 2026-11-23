@@ -112,6 +112,33 @@ export interface Claim {
 
 export type ClaimItem = Claim;
 
+export interface ConflictHistoryItem {
+  timestamp: string;
+  action: string;
+  previous_status: string;
+  new_status: string;
+  notes: string;
+  linked_document_id?: string | null;
+  linked_document_name?: string | null;
+}
+
+export interface ConflictSummaryStats {
+  total: number;
+  pending_review: number;
+  confirmed_conflicts: number;
+  auto_resolved: number;
+  resolved_by_reviewer: number;
+}
+
+export interface ConflictScanResponse {
+  scanned_clauses: number;
+  new_conflicts: number;
+  auto_resolved: number;
+  existing_conflicts: number;
+  total_conflicts: number;
+  message: string;
+}
+
 export interface Conflict {
   id: string;
   clause_a_id: string;
@@ -122,13 +149,21 @@ export interface Conflict {
     | 'SUPERSEDED'
     | 'TEMPORAL_DIFFERENCE'
     | 'CONDITIONAL_DIFFERENCE'
-    | 'NO_CONFLICT';
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    | 'NO_CONFLICT'
+    | string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string;
   scope_overlap: boolean;
   temporal_overlap: boolean;
-  resolution_status: 'PENDING_REVIEW' | 'RESOLVED_AMENDMENT' | 'RESOLVED_SCOPE' | 'DISMISSED';
+  resolution_status:
+    | 'PENDING_REVIEW'
+    | 'RESOLVED_AMENDMENT'
+    | 'RESOLVED_SCOPE'
+    | 'DISMISSED'
+    | 'AUTO_RESOLVED'
+    | string;
   resolution_notes?: string | null;
   created_at?: string;
+  updated_at?: string;
   // Enriched fields from API joins
   subject?: string;
   doc_a_name?: string;
@@ -139,6 +174,9 @@ export interface Conflict {
   value_b?: string;
   quote_a?: string;
   quote_b?: string;
+  linked_document_id?: string | null;
+  linked_document_name?: string | null;
+  history?: ConflictHistoryItem[];
   clause_a?: ClauseItem;
   clause_b?: ClauseItem;
 }
