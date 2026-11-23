@@ -13,7 +13,7 @@ import {
 const navigationItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Document Library', path: '/documents', icon: FileText },
-  { name: 'Ask VerifyDoc', path: '/chat', icon: MessageSquareQuote },
+  { name: 'Ask VerifyDoc', path: '/ask', icon: MessageSquareQuote },
   { name: 'Contradiction Centre', path: '/contradictions', icon: AlertTriangle },
   { name: 'Amendment Explorer', path: '/amendments', icon: GitBranch },
   { name: 'PDF Evidence Viewer', path: '/viewer', icon: FileSearch },
@@ -59,10 +59,6 @@ export const Sidebar: React.FC = () => {
           <p className="text-slate-400 leading-relaxed">
             <strong className="text-slate-200">NO EVIDENCE = NO ANSWER.</strong> All facts strictly resolved to source citations.
           </p>
-        </div>
-
-        <div className="text-[11px] text-slate-400 px-1 text-center">
-          VERITAS AI &copy; 2026 &middot; Stage 1 Foundation
         </div>
       </div>
     </aside>

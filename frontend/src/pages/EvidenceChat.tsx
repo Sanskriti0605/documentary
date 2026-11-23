@@ -2,47 +2,55 @@ import React, { useState } from 'react';
 import {
   Send,
   Percent,
-  ExternalLink,
   Calculator,
   ChevronDown,
   ChevronUp,
-  FileText,
   AlertTriangle,
-  BookOpen
+  BookOpen,
+  Loader2,
+  HelpCircle,
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
-import { askService, AskResponse } from '../services/api';
+import { askService } from '../services/api';
+import { AskResponse } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { CitationChip } from '../components/common/CitationChip';
 import { useAppStore } from '../stores/useAppStore';
-import { useNavigate } from 'react-router-dom';
 
 export const EvidenceChat: React.FC = () => {
   const [queryText, setQueryText] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [response, setResponse] = useState<AskResponse | null>(null);
   const [showEvidenceDrawer, setShowEvidenceDrawer] = useState<boolean>(false);
 
   const { asOfDate } = useAppStore();
-  const navigate = useNavigate();
 
-  const handleAsk = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAsk = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!queryText.trim()) return;
 
     setLoading(true);
+    setError(null);
     try {
       const data = await askService.ask(queryText, undefined, asOfDate);
       setResponse(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Query execution failed:', err);
+      setError(err?.response?.data?.detail || err?.message || 'Failed to process inquiry. Please ensure backend is running.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCitationClick = (docName: string, pageNum: number, bbox?: number[]) => {
-    const bboxStr = bbox ? `&bbox=${bbox.join(',')}` : '';
-    navigate(`/viewer?doc=${docName}&page=${pageNum}${bboxStr}`);
-  };
+  const sampleQuestions = [
+    'What is the foreclosure fee for prepayment of the personal loan facility?',
+    'What is the agreed rate of interest for Rajesh Sharma\'s personal loan?',
+    'What is the current penal charge rate for personal loan default in force as of 2026?',
+    'Calculate the processing fee with 18% GST for a personal loan of INR 500,000.',
+    'What is the interest subvention percentage for agricultural tractor loans?'
+  ];
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -74,15 +82,87 @@ export const EvidenceChat: React.FC = () => {
               disabled={loading || !queryText.trim()}
               className="flex items-center space-x-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors"
             >
-              <Send className="w-4 h-4" />
-              <span>{loading ? 'Verifying Evidence...' : 'Ask VerifyDoc'}</span>
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Verifying Evidence...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>Ask VerifyDoc</span>
+                </>
+              )}
             </button>
           </div>
         </form>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-4 shadow-sm">
+          <div className="flex justify-center">
+            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-navy-950">Evaluating Verification Gate</h3>
+            <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+              Retrieving multi-document clauses, executing DeBERTa-v3 cross-encoder NLI entailment, and checking deterministic number/date consistency...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 text-rose-900 space-y-3">
+          <div className="flex items-center space-x-2 font-bold text-sm">
+            <AlertTriangle className="w-4 h-4 text-rose-600" />
+            <span>Inquiry Verification Error</span>
+          </div>
+          <p className="text-xs text-rose-800">{error}</p>
+          <button
+            onClick={() => handleAsk()}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Question</span>
+          </button>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!response && !loading && !error && (
+        <div className="bg-white rounded-xl border border-dashed border-slate-300 p-8 text-center space-y-4">
+          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+            <HelpCircle className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-navy-950">Ready to Answer with 100% Verifiable Evidence</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              Ask questions across RBI Master Directions, Sanction Letters, Loan Policies, and Schedules of Charges. Claims without proof will be strictly blocked.
+            </p>
+          </div>
+          <div className="pt-2">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Suggested Inquiries</div>
+            <div className="flex flex-wrap justify-center gap-2 max-w-3xl mx-auto">
+              {sampleQuestions.map((q, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setQueryText(q)}
+                  className="text-left text-xs bg-slate-50 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 transition-colors"
+                >
+                  <Sparkles className="w-3 h-3 text-blue-500 inline mr-1.5" />
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Response Card */}
-      {response && (
+      {response && !loading && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden space-y-6 p-6">
           {/* Status & Faithfulness Meter */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
@@ -161,7 +241,7 @@ export const EvidenceChat: React.FC = () => {
             </div>
           )}
 
-          {/* Verified Claims & Citation Chips */}
+          {/* Verified Claims & Reusable Citation Chips */}
           {response.verified_claims && response.verified_claims.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -182,18 +262,17 @@ export const EvidenceChat: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Citation Chips */}
+                    {/* Citation Chips using reusable CitationChip */}
                     <div className="flex flex-wrap gap-2 pt-1">
                       {claim.citations.map((cit, cIdx) => (
-                        <button
+                        <CitationChip
                           key={cIdx}
-                          onClick={() => handleCitationClick(cit.document_name, cit.page_number, cit.bounding_box)}
-                          className="inline-flex items-center space-x-1.5 px-3 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-md border border-slate-200 text-xs transition-colors"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-blue-600" />
-                          <span className="font-semibold">{cit.document_name} &bull; P.{cit.page_number}</span>
-                          <ExternalLink className="w-3 h-3 ml-0.5 text-slate-400" />
-                        </button>
+                          documentName={cit.document_name}
+                          pageNumber={cit.page_number}
+                          quote={cit.quote || cit.exact_quote}
+                          clauseNumber={cit.clause_number}
+                          boundingBox={cit.bounding_box || undefined}
+                        />
                       ))}
                     </div>
                   </div>

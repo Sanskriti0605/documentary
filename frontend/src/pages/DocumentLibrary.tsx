@@ -11,6 +11,7 @@ import {
 import { documentService } from '../services/api';
 import { DocumentItem } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { DocStatusBadge } from '../components/common/DocStatusBadge';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../stores/useAppStore';
 
@@ -34,6 +35,7 @@ const DOCUMENT_TYPES = [
 export const DocumentLibrary: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [uploading, setUploading] = useState<boolean>(false);
@@ -45,11 +47,13 @@ export const DocumentLibrary: React.FC = () => {
 
   const fetchDocuments = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await documentService.listDocuments(selectedType || undefined);
       setDocuments(data.documents);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load documents:', err);
+      setError(err?.response?.data?.detail || err?.message || 'Failed to retrieve document library.');
     } finally {
       setLoading(false);
     }
@@ -170,6 +174,22 @@ export const DocumentLibrary: React.FC = () => {
         </div>
       </div>
 
+      {/* Error Alert */}
+      {error && !loading && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-rose-900 flex items-center justify-between shadow-sm">
+          <div className="flex items-center space-x-2 text-xs">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={fetchDocuments}
+            className="text-xs font-semibold text-rose-700 hover:text-rose-900 underline"
+          >
+            Retry Loading
+          </button>
+        </div>
+      )}
+
       {/* Document Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -178,7 +198,8 @@ export const DocumentLibrary: React.FC = () => {
               <tr>
                 <th className="px-6 py-3.5">Document Name</th>
                 <th className="px-6 py-3.5">Classification</th>
-                <th className="px-6 py-3.5">Status</th>
+                <th className="px-6 py-3.5">Legal State</th>
+                <th className="px-6 py-3.5">Ingestion</th>
                 <th className="px-6 py-3.5">Pages</th>
                 <th className="px-6 py-3.5">Clauses</th>
                 <th className="px-6 py-3.5">Upload Date</th>
@@ -188,13 +209,13 @@ export const DocumentLibrary: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
                     Loading documents...
                   </td>
                 </tr>
               ) : filteredDocuments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
                     No documents found. Click "Upload PDF Documents" to add lending policies and circulars.
                   </td>
                 </tr>
@@ -216,6 +237,9 @@ export const DocumentLibrary: React.FC = () => {
                       <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded">
                         {doc.document_type.replace(/_/g, ' ')}
                       </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <DocStatusBadge status={doc.doc_status || (doc.status === 'PROCESSED' ? 'in force' : 'draft')} />
                     </td>
                     <td className="px-6 py-4">
                       <StatusBadge status={doc.status} />

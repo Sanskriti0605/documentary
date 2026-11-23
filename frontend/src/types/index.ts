@@ -17,6 +17,16 @@ export type DocumentType =
 
 export type IngestionStatus = 'UPLOADED' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
 
+export type DocStatus =
+  | 'IN_FORCE'
+  | 'SUPERSEDED'
+  | 'WITHDRAWN'
+  | 'DRAFT'
+  | 'in force'
+  | 'superseded'
+  | 'withdrawn'
+  | 'draft';
+
 export interface DocumentItem {
   id: string;
   name: string;
@@ -31,6 +41,7 @@ export interface DocumentItem {
   status: IngestionStatus;
   page_count: number;
   clause_count: number;
+  doc_status?: DocStatus;
   created_at: string;
   updated_at: string;
 }
@@ -46,7 +57,7 @@ export interface PageItem {
 export interface ClauseItem {
   id: string;
   document_id: string;
-  page_id: string;
+  page_id?: string;
   parent_clause_id?: string;
   clause_number?: string;
   section_title?: string;
@@ -59,47 +70,47 @@ export interface ClauseItem {
   bounding_box?: number[];
 }
 
-export interface CitationItem {
+export interface Citation {
   id: string;
-  claim_id: string;
-  clause_id: string;
+  claim_id?: string;
+  clause_id?: string;
   page_number: number;
+  exact_quote?: string;
+  quote?: string; // alias for exact_quote
+  quote_hash?: string;
+  bounding_box?: number[] | null;
+  support_status?: 'FULL_SUPPORT' | 'PARTIAL_SUPPORT' | 'UNSUPPORTED';
+  created_at?: string;
+  // Enriched metadata from API joins
   document_id?: string;
-  document_name?: string;
+  document_name: string;
   clause_number?: string;
   section_title?: string;
-  exact_quote: string;
-  quote_hash: string;
-  bounding_box?: number[];
-  support_status: 'FULL_SUPPORT' | 'PARTIAL_SUPPORT' | 'UNSUPPORTED';
 }
 
-export interface ClaimItem {
+export type CitationItem = Citation;
+
+export interface Claim {
   id: string;
-  session_id: string;
+  session_id?: string;
   claim_text: string;
-  verification_status: 'VERIFIED' | 'UNSUPPORTED' | 'CONTRADICTED';
+  text?: string; // generator alias
+  verification_status: 'VERIFIED' | 'UNSUPPORTED' | 'CONTRADICTED' | 'BLOCKED';
+  status?: string;
   verification_score: number;
-  citations: CitationItem[];
+  verifier?: string;
+  nli_score?: number;
+  nli_label?: string;
+  citations: Citation[];
+  created_at?: string;
 }
 
-export interface QuerySession {
-  id: string;
-  query: string;
-  answer: string;
-  status: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'CONFLICTED' | 'INSUFFICIENT_EVIDENCE';
-  faithfulness_score: number;
-  as_of_date?: string;
-  claims: ClaimItem[];
-  created_at: string;
-}
+export type ClaimItem = Claim;
 
-export interface ConflictItem {
+export interface Conflict {
   id: string;
   clause_a_id: string;
   clause_b_id: string;
-  clause_a?: ClauseItem;
-  clause_b?: ClauseItem;
   conflict_type:
     | 'CONFIRMED_CONFLICT'
     | 'POSSIBLE_CONFLICT'
@@ -111,8 +122,40 @@ export interface ConflictItem {
   scope_overlap: boolean;
   temporal_overlap: boolean;
   resolution_status: 'PENDING_REVIEW' | 'RESOLVED_AMENDMENT' | 'RESOLVED_SCOPE' | 'DISMISSED';
-  resolution_notes?: string;
-  created_at: string;
+  resolution_notes?: string | null;
+  created_at?: string;
+  // Enriched fields from API joins
+  subject?: string;
+  doc_a_name?: string;
+  doc_b_name?: string;
+  clause_a_number?: string;
+  clause_b_number?: string;
+  value_a?: string;
+  value_b?: string;
+  quote_a?: string;
+  quote_b?: string;
+  clause_a?: ClauseItem;
+  clause_b?: ClauseItem;
+}
+
+export type ConflictItem = Conflict;
+
+export interface AmendmentEdge {
+  id: string;
+  source_clause_id?: string;
+  target_clause_id?: string;
+  relationship_type?: 'AMENDS' | 'SUPERSEDES' | 'MODIFIES' | 'REPLACES' | 'REPEALS';
+  old_value?: string | null;
+  new_value?: string | null;
+  effective_date?: string | null;
+  verification_status?: 'UNVERIFIED' | 'VERIFIED' | 'CONTESTED';
+  created_at?: string;
+  // React Flow graph compatibility aliases
+  source: string;
+  target: string;
+  relationship: string;
+  source_document_name?: string;
+  target_document_name?: string;
 }
 
 export interface AmendmentNode {
@@ -125,16 +168,6 @@ export interface AmendmentNode {
   clause_text: string;
   effective_from?: string;
   effective_to?: string;
-}
-
-export interface AmendmentEdge {
-  id: string;
-  source: string;
-  target: string;
-  relationship: string;
-  old_value?: string;
-  new_value?: string;
-  effective_date?: string;
 }
 
 export interface AmendmentGraph {
@@ -174,4 +207,52 @@ export interface SystemHealth {
   database: string;
   vector_store: string;
   storage_writable: boolean;
+}
+
+export interface AskResponse {
+  session_id: string;
+  query: string;
+  answer: string;
+  status: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'CONFLICTED' | 'INSUFFICIENT_EVIDENCE';
+  faithfulness_score: number;
+  generated_count: number;
+  verified_count: number;
+  blocked_count: number;
+  generation_provider?: string;
+  is_fallback?: boolean;
+  model_name?: string;
+  verified_claims: Array<{
+    text: string;
+    status: string;
+    verifier?: string;
+    nli_score?: number;
+    nli_label?: string;
+    citations: Citation[];
+  }>;
+  blocked_claims: Array<{
+    original_claim: string;
+    reason: string;
+    verifier?: string;
+    message: string;
+  }>;
+  calculation?: {
+    type: string;
+    result: any;
+    summary: string;
+  };
+  retrieved_quotes: Array<any>;
+}
+
+export interface EvalBenchmarkResponse {
+  total_test_cases: number;
+  passed: number;
+  failed: number;
+  accuracy_percentage: number;
+  results: Array<{
+    test_case_id: string;
+    category: string;
+    question: string;
+    status: 'PASSED' | 'FAILED';
+    details: any;
+  }>;
 }

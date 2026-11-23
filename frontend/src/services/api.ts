@@ -1,74 +1,23 @@
 import axios from 'axios';
 import {
   DocumentItem,
+  Conflict,
   ConflictItem,
   AmendmentGraph,
   TimelineItem,
   AnalyticsStats,
   SystemHealth,
-  ClauseItem
+  ClauseItem,
+  AskResponse,
+  EvalBenchmarkResponse
 } from '../types';
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: '/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
 });
-
-export interface AskResponse {
-  session_id: string;
-  query: string;
-  answer: string;
-  status: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'CONFLICTED' | 'INSUFFICIENT_EVIDENCE';
-  faithfulness_score: number;
-  generated_count: number;
-  verified_count: number;
-  blocked_count: number;
-  generation_provider?: string;
-  is_fallback?: boolean;
-  model_name?: string;
-  verified_claims: Array<{
-    text: string;
-    status: string;
-    verifier?: string;
-    nli_score?: number;
-    nli_label?: string;
-    citations: Array<{
-      quote: string;
-      document_name: string;
-      page_number: number;
-      clause_number?: string;
-      bounding_box?: number[];
-    }>;
-  }>;
-  blocked_claims: Array<{
-    original_claim: string;
-    reason: string;
-    verifier?: string;
-    message: string;
-  }>;
-  calculation?: {
-    type: string;
-    result: any;
-    summary: string;
-  };
-  retrieved_quotes: Array<any>;
-}
-
-export interface EvalBenchmarkResponse {
-  total_test_cases: number;
-  passed: number;
-  failed: number;
-  accuracy_percentage: number;
-  results: Array<{
-    test_case_id: string;
-    category: string;
-    question: string;
-    status: 'PASSED' | 'FAILED';
-    details: any;
-  }>;
-}
 
 export const systemService = {
   getHealth: async (): Promise<SystemHealth> => {
@@ -129,8 +78,8 @@ export const conflictService = {
     const res = await api.get<{ total: number; conflicts: ConflictItem[] }>('/conflicts', { params });
     return res.data;
   },
-  reviewConflict: async (id: string, resolutionStatus: string, notes: string): Promise<ConflictItem> => {
-    const res = await api.post<ConflictItem>(`/conflicts/${id}/review`, {
+  reviewConflict: async (id: string, resolutionStatus: string, notes: string): Promise<Conflict> => {
+    const res = await api.post<Conflict>(`/conflicts/${id}/review`, {
       resolution_status: resolutionStatus,
       resolution_notes: notes,
     });
@@ -155,5 +104,8 @@ export const evalService = {
     return res.data;
   },
 };
+
+// Re-export shared types for callers that import from api
+export type { AskResponse, EvalBenchmarkResponse } from '../types';
 
 export default api;

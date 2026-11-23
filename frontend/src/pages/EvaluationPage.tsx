@@ -1,22 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import {
   Layers,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
-import { evalService, EvalBenchmarkResponse } from '../services/api';
+import { evalService } from '../services/api';
+import { EvalBenchmarkResponse } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
 
 export const EvaluationPage: React.FC = () => {
   const [evalData, setEvalData] = useState<EvalBenchmarkResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const runEvaluation = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await evalService.runEvaluation();
       setEvalData(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to run benchmark:', err);
+      setError(err?.response?.data?.detail || err?.message || 'Failed to execute planted trap benchmark.');
     } finally {
       setLoading(false);
     }
@@ -47,8 +53,37 @@ export const EvaluationPage: React.FC = () => {
         </button>
       </div>
 
+      {/* Error Alert */}
+      {error && !loading && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 text-rose-900 space-y-3 shadow-sm">
+          <div className="flex items-center space-x-2 font-bold text-sm">
+            <AlertTriangle className="w-4 h-4 text-rose-600" />
+            <span>Evaluation Runner Error</span>
+          </div>
+          <p className="text-xs text-rose-800">{error}</p>
+          <button
+            onClick={runEvaluation}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Benchmark</span>
+          </button>
+        </div>
+      )}
+
+      {/* Loading Banner */}
+      {loading && (
+        <div className="bg-white p-12 rounded-xl border border-slate-200 text-center space-y-3 shadow-sm">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
+          <h3 className="font-semibold text-navy-950 text-sm">Executing 5 Planted-Trap Verification Scenarios</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Testing multi-page clause stitching, numerical contradictions, 3-step circular amendment resolution, abstention on missing proof, and deterministic calculations...
+          </p>
+        </div>
+      )}
+
       {/* KPI Stats */}
-      {evalData && (
+      {evalData && !loading && (
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Planted Traps</span>
