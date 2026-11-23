@@ -6,8 +6,13 @@ import app.database.models  # Register models
 async def init_db():
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Check and migrate newly added columns in SQLite conflicts table
+        # Check and migrate newly added columns in SQLite documents & conflicts tables
         try:
+            doc_cols_res = await conn.execute(text("PRAGMA table_info(documents)"))
+            existing_doc_cols = {row[1] for row in doc_cols_res.fetchall()}
+            if "doc_status" not in existing_doc_cols:
+                await conn.execute(text("ALTER TABLE documents ADD COLUMN doc_status VARCHAR(32) DEFAULT 'IN_FORCE'"))
+
             columns_res = await conn.execute(text("PRAGMA table_info(conflicts)"))
             existing_cols = {row[1] for row in columns_res.fetchall()}
             

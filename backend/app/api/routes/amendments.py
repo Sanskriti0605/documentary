@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database.session import get_db
@@ -8,71 +8,55 @@ from app.schemas.amendment import (
     AmendmentGraphResponse,
     AmendmentGraphNode,
     AmendmentGraphEdge,
-    TimelineItemResponse
+    TimelineItemResponse,
+    AmendmentResolutionResponse
 )
+from app.intelligence.amendments import resolve_amendments_for_rule
 
 router = APIRouter(prefix="/amendments", tags=["Amendments"])
 
+@router.get("", response_model=AmendmentResolutionResponse)
+async def get_amendments(
+    rule: Optional[str] = Query(None, description="Rule subject or document family, e.g. 'penal_charges' or 'interest_rate'"),
+    as_of: Optional[str] = Query(None, description="Evaluation As-Of date in YYYY-MM-DD format"),
+    lender_type: Optional[str] = Query(None, description="Regulated Entity lender type (COMMERCIAL_BANK, NBFC, HFC)"),
+    sanction_date: Optional[str] = Query(None, description="Loan sanction date in YYYY-MM-DD format"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Resolve amendment lineage, graph, timeline, and version in force on specified as_of date.
+    Handles future effective dates, non-binding drafts, partial amendments, and withdrawn documents.
+    """
+    return await resolve_amendments_for_rule(
+        rule=rule or "penal_charges",
+        as_of=as_of,
+        lender_type=lender_type,
+        sanction_date=sanction_date,
+        db=db
+    )
+
 @router.get("/graph", response_model=AmendmentGraphResponse)
-async def get_amendment_graph(db: AsyncSession = Depends(get_db)):
-    edges_stmt = select(AmendmentEdge)
-    edges_res = await db.execute(edges_stmt)
-    edges_list = edges_res.scalars().all()
-
-    node_ids = set()
-    for e in edges_list:
-        node_ids.add(e.source_clause_id)
-        node_ids.add(e.target_clause_id)
-
-    nodes = []
-    for nid in node_ids:
-        clause = await db.get(Clause, nid)
-        if clause:
-            doc = await db.get(Document, clause.document_id)
-            nodes.append(AmendmentGraphNode(
-                id=clause.id,
-                label=f"{doc.name if doc else 'Doc'} (Clause {clause.clause_number or 'N/A'})",
-                document_name=doc.name if doc else "Unknown",
-                document_type=doc.document_type if doc else "UNKNOWN",
-                clause_number=clause.clause_number,
-                section_title=clause.section_title,
-                clause_text=clause.clause_text[:120] + "..." if len(clause.clause_text) > 120 else clause.clause_text,
-                effective_from=clause.effective_from,
-                effective_to=clause.effective_to
-            ))
-
-    edges = [
-        AmendmentGraphEdge(
-            id=e.id,
-            source=e.source_clause_id,
-            target=e.target_clause_id,
-            relationship=e.relationship_type,
-            old_value=e.old_value,
-            new_value=e.new_value,
-            effective_date=e.effective_date
-        )
-        for e in edges_list
-    ]
-
-    return AmendmentGraphResponse(nodes=nodes, edges=edges)
+async def get_amendment_graph(
+    rule: Optional[str] = Query(None),
+    as_of: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    resolution = await resolve_amendments_for_rule(
+        rule=rule or "penal_charges",
+        as_of=as_of,
+        db=db
+    )
+    return AmendmentGraphResponse(nodes=resolution.nodes, edges=resolution.edges)
 
 @router.get("/timeline", response_model=List[TimelineItemResponse])
-async def get_amendment_timeline(db: AsyncSession = Depends(get_db)):
-    stmt = select(AmendmentEdge).order_by(AmendmentEdge.effective_date.asc().nulls_last())
-    res = await db.execute(stmt)
-    edges = res.scalars().all()
-
-    timeline = []
-    for e in edges:
-        clause = await db.get(Clause, e.source_clause_id)
-        doc = await db.get(Document, clause.document_id) if clause else None
-        timeline.append(TimelineItemResponse(
-            date=e.effective_date,
-            event_type=e.relationship_type,
-            document_name=doc.name if doc else "Unknown",
-            clause_number=clause.clause_number if clause else None,
-            description=f"Amended value from '{e.old_value or 'N/A'}' to '{e.new_value or 'N/A'}'",
-            clause_id=e.source_clause_id
-        ))
-
-    return timeline
+async def get_amendment_timeline(
+    rule: Optional[str] = Query(None),
+    as_of: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    resolution = await resolve_amendments_for_rule(
+        rule=rule or "penal_charges",
+        as_of=as_of,
+        db=db
+    )
+    return resolution.timeline

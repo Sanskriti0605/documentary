@@ -36,6 +36,7 @@ class Document(Base):
     effective_to = Column(Date, nullable=True)
     version = Column(String(32), nullable=True, default="1.0")
     status = Column(String(32), nullable=False, default="UPLOADED", index=True) # UPLOADED, PROCESSING, PROCESSED, FAILED
+    doc_status = Column(String(32), nullable=False, default="IN_FORCE", index=True) # IN_FORCE, SUPERSEDED, WITHDRAWN, DRAFT
     metadata_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

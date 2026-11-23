@@ -201,6 +201,48 @@ export interface AmendmentEdge {
   target_document_name?: string;
 }
 
+export interface ApplicabilityConditions {
+  sanction_date?: string | null;
+  lender_type?: string | null;
+  scope?: string | null;
+  notes?: string | null;
+}
+
+export interface VersionInForceItem {
+  document_id: string;
+  document_name: string;
+  document_type: string;
+  clause_id?: string | null;
+  clause_number?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  status: string;
+  value?: string | null;
+  quote: string;
+  amending_quote?: string | null;
+  is_partial_amendment?: boolean;
+  inherited_from_document?: string | null;
+  applicability_conditions?: ApplicabilityConditions | null;
+}
+
+export interface ChainVersionItem {
+  id: string;
+  document_id: string;
+  document_name: string;
+  document_type: string;
+  clause_id?: string | null;
+  clause_number?: string | null;
+  publication_date?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  status: string;
+  relationship_to_prior?: string | null;
+  quote: string;
+  amending_quote?: string | null;
+  is_partial_amendment?: boolean;
+  applicability_conditions?: ApplicabilityConditions | null;
+}
+
 export interface AmendmentNode {
   id: string;
   label: string;
@@ -211,6 +253,7 @@ export interface AmendmentNode {
   clause_text: string;
   effective_from?: string;
   effective_to?: string;
+  status?: string;
 }
 
 export interface AmendmentGraph {
@@ -225,6 +268,19 @@ export interface TimelineItem {
   clause_number?: string;
   description: string;
   clause_id: string;
+  status?: string;
+  quote?: string;
+}
+
+export interface AmendmentResolutionResponse {
+  rule: string;
+  as_of: string;
+  version_in_force?: VersionInForceItem | null;
+  chain: ChainVersionItem[];
+  nodes: AmendmentNode[];
+  edges: AmendmentEdge[];
+  timeline: TimelineItem[];
+  available_rules: Array<{ id: string; name: string; subject?: string }>;
 }
 
 export interface AnalyticsStats {

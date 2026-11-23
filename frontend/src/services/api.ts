@@ -11,7 +11,8 @@ import {
   AskResponse,
   EvalBenchmarkResponse,
   ConflictSummaryStats,
-  ConflictScanResponse
+  ConflictScanResponse,
+  AmendmentResolutionResponse
 } from '../types';
 
 export const api = axios.create({
@@ -130,12 +131,32 @@ export const conflictService = {
 };
 
 export const amendmentService = {
-  getGraph: async (): Promise<AmendmentGraph> => {
-    const res = await api.get<AmendmentGraph>('/amendments/graph');
+  resolveAmendments: async (
+    rule?: string,
+    asOf?: string,
+    lenderType?: string,
+    sanctionDate?: string
+  ): Promise<AmendmentResolutionResponse> => {
+    const params: Record<string, string> = {};
+    if (rule) params.rule = rule;
+    if (asOf) params.as_of = asOf;
+    if (lenderType) params.lender_type = lenderType;
+    if (sanctionDate) params.sanction_date = sanctionDate;
+    const res = await api.get<AmendmentResolutionResponse>('/amendments', { params });
     return res.data;
   },
-  getTimeline: async (): Promise<TimelineItem[]> => {
-    const res = await api.get<TimelineItem[]>('/amendments/timeline');
+  getGraph: async (rule?: string, asOf?: string): Promise<AmendmentGraph> => {
+    const params: Record<string, string> = {};
+    if (rule) params.rule = rule;
+    if (asOf) params.as_of = asOf;
+    const res = await api.get<AmendmentGraph>('/amendments/graph', { params });
+    return res.data;
+  },
+  getTimeline: async (rule?: string, asOf?: string): Promise<TimelineItem[]> => {
+    const params: Record<string, string> = {};
+    if (rule) params.rule = rule;
+    if (asOf) params.as_of = asOf;
+    const res = await api.get<TimelineItem[]>('/amendments/timeline', { params });
     return res.data;
   },
 };
