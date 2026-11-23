@@ -41,18 +41,51 @@ def parse_pdf(file_path: str) -> Tuple[List[ParsedPage], Dict[str, Any]]:
         page_num = page_idx + 1
         page = doc[page_idx]
 
-        # Extract words/spans with bounding boxes [x0, y0, x1, y1]
-        text_page = page.get_text("words")  # (x0, y0, x1, y1, word, block_no, line_no, word_no)
+        # Extract words/spans with bounding boxes [x0, y0, x1, y1], filtering rotated watermark lines
+        d = page.get_text("dict")
         spans = []
-        for item in text_page:
-            spans.append({
-                "bbox": [round(item[0], 2), round(item[1], 2), round(item[2], 2), round(item[3], 2)],
-                "text": item[4],
-                "block": item[5],
-                "line": item[6]
-            })
+        clean_lines_text = []
 
-        full_page_text = page.get_text("text")
+        for block in d.get("blocks", []):
+            if block.get("type") != 0:
+                continue
+            for line in block.get("lines", []):
+                line_dir = line.get("dir", (1.0, 0.0))
+                # Skip rotated text (e.g. diagonal watermark)
+                if abs(line_dir[1]) > 0.01 or abs(line_dir[0] - 1.0) > 0.01:
+                    continue
+
+                line_words_text = []
+                for span in line.get("spans", []):
+                    span_dir = span.get("dir", line_dir) or line_dir
+                    if abs(span_dir[1]) > 0.01 or abs(span_dir[0] - 1.0) > 0.01:
+                        continue
+                    text = span.get("text", "")
+                    if not text.strip():
+                        continue
+                    # Filter oversized watermark keywords
+                    if text.strip().lower() in ["draft", "confidential", "sample", "specimen"] and span.get("size", 0) >= 32:
+                        continue
+
+                    line_words_text.append(text)
+                    bbox = span.get("bbox", [0, 0, 0, 0])
+                    words = text.split()
+                    char_w = (bbox[2] - bbox[0]) / max(len(text), 1)
+                    curr_x = bbox[0]
+                    for w in words:
+                        w_len = len(w) * char_w
+                        spans.append({
+                            "bbox": [round(curr_x, 2), round(bbox[1], 2), round(curr_x + w_len, 2), round(bbox[3], 2)],
+                            "text": w,
+                            "block": block.get("number", 0),
+                            "line": line.get("number", 0)
+                        })
+                        curr_x += (len(w) + 1) * char_w
+
+                if line_words_text:
+                    clean_lines_text.append(" ".join(line_words_text))
+
+        full_page_text = "\n".join(clean_lines_text) if clean_lines_text else page.get_text("text")
         all_pages_text.append(full_page_text)
 
         # Extract structured tables using pdfplumber if available

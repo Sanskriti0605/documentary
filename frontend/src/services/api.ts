@@ -76,10 +76,37 @@ export const pdfService = {
   getPdfInfo: async (
     docNameOrId: string
   ): Promise<{
+    document_id?: string;
+    document_name?: string;
     page_count: number;
     pages: Array<{ page_number: number; width: number; height: number }>;
   }> => {
     const res = await api.get(`/pdf/${encodeURIComponent(docNameOrId)}/info`);
+    return res.data;
+  },
+
+  getQuoteBoxes: async (
+    docNameOrId: string,
+    quote: string,
+    page: number = 1
+  ): Promise<{
+    found: boolean;
+    page_number: number;
+    boxes: number[][];
+    is_multiline: boolean;
+    cross_page?: {
+      is_cross_page: boolean;
+      continues_on_page?: number | null;
+      continued_from_page?: number | null;
+      continuation_quote?: string;
+    } | null;
+    warning?: string | null;
+    document_id?: string;
+    document_name?: string;
+  }> => {
+    const res = await api.get(`/pdf/${encodeURIComponent(docNameOrId)}/quote-boxes`, {
+      params: { quote, page }
+    });
     return res.data;
   },
 };
