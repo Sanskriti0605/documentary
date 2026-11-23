@@ -15,7 +15,7 @@ dist/
 build/
 .npm/
 
-# Storage
+# Storage (root and backend/)
 storage/uploads/*
 !storage/uploads/.gitkeep
 storage/rendered/*
@@ -24,6 +24,12 @@ storage/qdrant/*
 !storage/qdrant/.gitkeep
 storage/db/*
 !storage/db/.gitkeep
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
+backend/storage/rendered/*
+!backend/storage/rendered/.gitkeep
+backend/storage/qdrant/
+backend/storage/db/*.db
 
 # OS / IDE
 .DS_Store

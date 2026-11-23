@@ -148,12 +148,21 @@ def segment_clauses_with_bboxes(
                     current_clause["clause_text"] += " " + line_str
                 else:
                     # Lead-in paragraph or header before first clause
+                    lead_spans = [s["bbox"] for s in page.spans if s["bbox"][1] < 220]
+                    lead_bbox = [72.0, 72.0, 540.0, 180.0]
+                    if lead_spans:
+                        lead_bbox = [
+                            min(s[0] for s in lead_spans),
+                            min(s[1] for s in lead_spans),
+                            max(s[2] for s in lead_spans),
+                            max(s[3] for s in lead_spans),
+                        ]
                     current_clause = {
                         "page_number": page.page_number,
                         "clause_number": "Preamble",
                         "section_title": "Preamble / General Provisions",
                         "clause_text": line_str,
-                        "bounding_box": None,
+                        "bounding_box": lead_bbox,
                         "tables": page.tables
                     }
 

@@ -58,8 +58,28 @@ export const documentService = {
     const res = await api.get<ClauseItem[]>(`/documents/${documentId}/clauses`);
     return res.data;
   },
+  getAllClauses: async (limit: number = 50): Promise<ClauseItem[]> => {
+    const res = await api.get<ClauseItem[]>('/documents/clauses/all', { params: { limit } });
+    return res.data;
+  },
+  getClauseDetail: async (clauseId: string): Promise<any> => {
+    const res = await api.get(`/documents/clause/${clauseId}`);
+    return res.data;
+  },
   processDocument: async (id: string): Promise<any> => {
     const res = await api.post(`/documents/${id}/process`);
+    return res.data;
+  },
+};
+
+export const pdfService = {
+  getPdfInfo: async (
+    docNameOrId: string
+  ): Promise<{
+    page_count: number;
+    pages: Array<{ page_number: number; width: number; height: number }>;
+  }> => {
+    const res = await api.get(`/pdf/${encodeURIComponent(docNameOrId)}/info`);
     return res.data;
   },
 };
