@@ -124,5 +124,8 @@ async def ask_question(
         "verified_claims": gate_result["verified_claims"],
         "blocked_claims": gate_result["blocked_claims"],
         "calculation": gen_result.get("calculation"),
+        "generation_provider": gen_result.get("generation_provider", "extractive-fallback"),
+        "is_fallback": gen_result.get("is_fallback", True),
+        "model_name": gen_result.get("model_name", "none"),
         "retrieved_quotes": retrieved_quotes
     }

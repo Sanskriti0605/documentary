@@ -86,10 +86,19 @@ export const EvidenceChat: React.FC = () => {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden space-y-6 p-6">
           {/* Status & Faithfulness Meter */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={response.status} className="text-sm px-3 py-1" />
+              {response.is_fallback ? (
+                <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-md text-xs font-semibold">
+                  <span>⚡ Fallback: Extractive Grounding (Ollama Offline)</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-xs font-semibold">
+                  <span>🤖 LLM: Ollama ({response.model_name || 'qwen2.5:7b'}) [Schema-Constrained]</span>
+                </span>
+              )}
               <div className="text-xs text-slate-500">
-                Claims breakdown: <strong className="text-slate-800">{response.verified_count} verified</strong>,{' '}
+                <strong className="text-slate-800">{response.verified_count} verified</strong>,{' '}
                 <strong className="text-rose-600">{response.blocked_count} blocked</strong> (Total: {response.generated_count})
               </div>
             </div>
@@ -139,7 +148,12 @@ export const EvidenceChat: React.FC = () => {
               <div className="space-y-2">
                 {response.blocked_claims.map((bc, bIdx) => (
                   <div key={bIdx} className="text-xs text-rose-800 bg-white p-2.5 rounded border border-rose-200">
-                    <p className="font-semibold text-rose-900">"{bc.original_claim}"</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-rose-900">"{bc.original_claim}"</p>
+                      <span className="text-[10px] font-mono text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">
+                        {bc.verifier || 'deterministic-gate'}
+                      </span>
+                    </div>
                     <p className="text-[11px] text-rose-700 mt-1">{bc.message}</p>
                   </div>
                 ))}
@@ -160,7 +174,12 @@ export const EvidenceChat: React.FC = () => {
                       <div className="text-sm font-semibold text-slate-900">
                         {idx + 1}. {claim.text}
                       </div>
-                      <StatusBadge status="VERIFIED" />
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[10px] font-mono bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
+                          {claim.verifier || 'DeBERTa-v3 NLI'}
+                        </span>
+                        <StatusBadge status="VERIFIED" />
+                      </div>
                     </div>
 
                     {/* Citation Chips */}

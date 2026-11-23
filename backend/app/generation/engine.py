@@ -187,11 +187,26 @@ async def generate_verifiable_answer(
 
     # Try local Ollama if configured
     llm_output = None
-    if settings.AI_PROVIDER == "ollama":
+    is_fallback = True
+    generation_provider = "extractive-fallback"
+    model_name = "none"
+
+    if settings.AI_PROVIDER in ("ollama", "local"):
         llm_output = await call_ollama(user_prompt, settings.GENERATION_MODEL, settings.OLLAMA_BASE_URL)
+        if llm_output and "claims" in llm_output:
+            is_fallback = False
+            generation_provider = f"ollama ({settings.GENERATION_MODEL})"
+            model_name = settings.GENERATION_MODEL
 
     if not llm_output or "claims" not in llm_output:
         llm_output = fallback_extractive_generation(query, retrieved_quotes)
+        is_fallback = True
+        generation_provider = "extractive-fallback"
+        model_name = "none"
+
+    llm_output["is_fallback"] = is_fallback
+    llm_output["generation_provider"] = generation_provider
+    llm_output["model_name"] = model_name
 
     # If calculation was extracted, add calculation step
     if calc_data:

@@ -25,9 +25,15 @@ export interface AskResponse {
   generated_count: number;
   verified_count: number;
   blocked_count: number;
+  generation_provider?: string;
+  is_fallback?: boolean;
+  model_name?: string;
   verified_claims: Array<{
     text: string;
     status: string;
+    verifier?: string;
+    nli_score?: number;
+    nli_label?: string;
     citations: Array<{
       quote: string;
       document_name: string;
@@ -39,6 +45,7 @@ export interface AskResponse {
   blocked_claims: Array<{
     original_claim: string;
     reason: string;
+    verifier?: string;
     message: string;
   }>;
   calculation?: {

@@ -18,18 +18,18 @@ flowchart TD
     
     E["User Query (English / Hindi)"] --> F["Query Decomposition & Temporal Resolution"]
     F --> G["Multi-Document Hybrid Retrieval"]
-    G --> H["BM25 (rank_bm25) + Dense Vectors (BGE-M3)"]
-    H --> I["Reciprocal Rank Fusion (RRF) & Context Expansion"]
+    G --> H["BM25 (rank_bm25 v0.2.2) + Dense Overlap"]
+    H --> I["Reciprocal Rank Fusion (RRF, k=60) & Context Expansion"]
     
-    I --> J["Evidence-Constrained Local LLM Generation"]
+    I --> J["Evidence-Constrained Generation (Local Ollama / Fallback)"]
     J --> K["Structured JSON: {claims: [{text, quote_ids}]}"]
     
     K --> L{"3-Point Verification Gate"}
-    L -- "Check 1: Verbatim Substring" --> M{"Pass?"}
-    L -- "Check 2: Numbers, Pct, Dates Regex" --> M
-    L -- "Check 3: DeBERTa-v3 NLI Entailment" --> M
+    L -- "Gate 1: Verbatim Substring" --> M{"Pass?"}
+    L -- "Gate 2: Numbers, Pct, Dates Regex" --> M
+    L -- "Gate 3: DeBERTa-v3 Cross-Encoder NLI" --> M
     
-    M -- "ALL CHECKS PASSED" --> N["Verified Claim + Citation Chip"]
+    M -- "ALL CHECKS PASSED" --> N["Verified Claim + Citation Chip + Verifier Label"]
     M -- "ANY CHECK FAILED" --> O["BLOCKED CLAIM + Explicit Missing Evidence Notice"]
     
     N --> P["Faithfulness Score Meter (N generated, M blocked)"]
@@ -39,19 +39,19 @@ flowchart TD
 
 ---
 
-## 2. Open-Source Models & Technology Stack
+## 2. Component Implementation & Runtime Specifications
 
-| Layer | Technology / Model | License | Role |
-| :--- | :--- | :--- | :--- |
-| **Parsing** | `PyMuPDF` (`fitz`) + `pdfplumber` | AGPL / MIT | Text spans with `[x0, y0, x1, y1]`, tables as structured rows, page bitmap rendering |
-| **Embeddings** | `BAAI/bge-m3` | Apache 2.0 | Multilingual dense vector representations (English + Hindi) |
-| **Keyword Search** | `BM25Okapi` (`rank-bm25`) | Apache 2.0 | Sparse lexical keyword retrieval |
-| **Fusion & Graph** | `Reciprocal Rank Fusion` + `NetworkX` | BSD | Rank fusion ($k=60$) & directed amendment graph ($A \to B \to C$) |
-| **Generation** | `Qwen2.5-7B-Instruct` / Local Ollama | Apache 2.0 | Evidence-constrained generation with strict JSON schema |
-| **Verification Gate** | `mDeBERTa-v3-base-mnli-xnli` + Deterministic Regex | MIT | 3-point gate: verbatim match, number/date consistency, NLI entailment |
-| **Calculations** | Python `decimal.Decimal` | PSF | Deterministic EMI, penal charge, and fee calculations with step-by-step audit trail |
-| **Backend** | Python 3.11, `FastAPI`, `SQLAlchemy`, `SQLite` | MIT | Asynchronous REST APIs, background ingestion, evaluation runner |
-| **Frontend** | React 18, `Vite`, `TypeScript`, `Tailwind CSS`, `@xyflow/react` | MIT | Library, Ask VerifyDoc, Contradictions, Amendment Timeline, PDF Viewer, Evaluation |
+| Component | Technology & Model | Version | Mode | Fallback Behavior |
+| :--- | :--- | :--- | :--- | :--- |
+| **Parsing** | `PyMuPDF` (`fitz`) + `pdfplumber` | `1.23.26` / `0.11.0` | **Real** | Extracts text spans with pixel bounding boxes `[x0, y0, x1, y1]`, tables as structured rows |
+| **Keyword Search** | `BM25Okapi` (`rank-bm25`) | `0.2.2` | **Real** | Sparse lexical keyword scoring on tokenized clause corpus |
+| **Dense Retrieval** | Dense Token Intersect / `Qdrant` | `qdrant-client 1.8.0` | **Hybrid** | In-memory token overlap merged via Reciprocal Rank Fusion ($k=60$) |
+| **Generation** | Ollama (`qwen2.5:1.5b` / `qwen2.5:7b`) | `0.3.x` | **Real** | When Ollama is offline, switches to deterministic extractive grounding and labels `is_fallback: true` |
+| **NLI Verification Gate** | `cross-encoder/nli-deberta-v3-small` | Hugging Face Hub | **Real** | Evaluates premise-hypothesis entailment; reports active verifier and probabilities per claim |
+| **Calculations** | Python `decimal.Decimal` | PSF | **Real** | Deterministic reducing-balance EMI, RBI non-capitalized penal charges, and fees + 18% GST |
+| **PDF Rendering** | `PyMuPDF` | `1.23.26` | **Real** | Dynamic high-res PNG page rendering with semi-transparent yellow highlight overlays |
+| **Backend** | `FastAPI`, `SQLAlchemy`, `aiosqlite` | `0.110.0` / `2.0.28` | **Real** | Async REST APIs, database persistence, planted-trap test runner |
+| **Frontend** | React 18, `Vite`, `Tailwind CSS`, `@xyflow/react` | `18.2` / `6.4.6` | **Real** | Dashboard, Library, Ask VerifyDoc, Contradictions, Amendments, PDF Viewer, Evaluation |
 
 ---
 
@@ -73,14 +73,30 @@ VerifyDoc includes a synthetic Indian banking test suite (`datasets/benchmark/te
 
 ## 4. Quickstart Guide
 
-### 1. Prerequisites
-- Python 3.11+
-- Node.js 18+ and npm
-- (Optional) [Ollama](https://ollama.ai) for local LLM inference
+### Option A: Docker Compose (Zero-Config from Clean Clone)
 
-### 2. Backend Setup
+Run the entire stack with Ollama, automated model pre-download, database initialization, backend, and frontend:
+
 ```bash
 # Clone the repository
+git clone https://github.com/Sanskriti0605/documentary.git
+cd documentary
+
+# Start all services with automated seeding and model download
+docker compose up --build
+```
+
+* **Web UI:** `http://localhost:5173`
+* **FastAPI Docs:** `http://localhost:8001/docs`
+* **Ollama Service:** `http://localhost:11434`
+
+---
+
+### Option B: Native Local Setup
+
+#### 1. Backend Setup
+```bash
+# Clone and enter repo
 git clone https://github.com/Sanskriti0605/documentary.git
 cd documentary
 
@@ -98,7 +114,7 @@ PYTHONPATH=backend uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 Interactive API docs: `http://localhost:8001/docs`
 
-### 3. Frontend Setup
+#### 2. Frontend Setup
 ```bash
 # In another terminal:
 cd frontend
@@ -113,7 +129,7 @@ Open **`http://localhost:5173`** in your browser.
 
 - `POST /documents/upload`: Upload PDF documents with automatic parsing, bounding box extraction, and table detection.
 - `GET /documents`: List ingested documents with page counts, clause counts, and processing status.
-- `POST /ask`: Execute evidence-constrained question answering with verification gating and faithfulness scores.
+- `POST /ask`: Execute evidence-constrained question answering with verification gating, faithfulness scores, and model provenance (`generation_provider`, `is_fallback`, `verifier`).
 - `GET /conflicts`: List detected contradictory clauses across documents with side-by-side quotes.
 - `POST /conflicts/{id}/review`: Review and reconcile conflicts (`RESOLVED_AMENDMENT`, `RESOLVED_SCOPE`, `DISMISSED`).
 - `GET /amendments/graph`: Return directed amendment relationship graph (`@xyflow/react` compatible).
