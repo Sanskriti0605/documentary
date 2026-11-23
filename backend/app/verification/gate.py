@@ -201,7 +201,10 @@ def run_verification_gate(
         if not citations:
             blocked_claims.append({
                 "original_claim": claim_text,
+                "verdict": "BLOCKED",
                 "reason": "MISSING_EVIDENCE",
+                "searched_for": claim_text,
+                "missing": "Supporting documentary quotation, page number, and clause citation.",
                 "verifier": "deterministic-rules",
                 "message": f"BLOCKED: Claim '{claim_text}' has no supporting documentary evidence attached."
             })
@@ -245,6 +248,7 @@ def run_verification_gate(
         if claim_verified:
             verified_claims.append({
                 "text": claim_text,
+                "verdict": "VERIFIED",
                 "status": "VERIFIED",
                 "verifier": active_verifier,
                 "nli_score": nli_details.get("score", 1.0),
@@ -252,12 +256,16 @@ def run_verification_gate(
                 "citations": citations
             })
         else:
+            missing_desc = "; ".join(failure_reasons) if failure_reasons else "Verifiable documentary proof in cited pages."
             blocked_claims.append({
                 "original_claim": claim_text,
+                "verdict": "BLOCKED",
                 "reason": "FAILED_VERIFICATION",
+                "searched_for": claim_text,
+                "missing": missing_desc,
                 "verifier": active_verifier,
                 "failure_reasons": failure_reasons,
-                "message": f"BLOCKED: Lacks verified evidence. " + "; ".join(failure_reasons)
+                "message": f"BLOCKED: Lacks verified evidence. " + missing_desc
             })
 
     num_verified = len(verified_claims)

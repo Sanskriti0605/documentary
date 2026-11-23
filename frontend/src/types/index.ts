@@ -97,8 +97,13 @@ export interface Claim {
   text?: string; // generator alias
   verification_status: 'VERIFIED' | 'UNSUPPORTED' | 'CONTRADICTED' | 'BLOCKED';
   status?: string;
+  verdict?: string;
   verification_score: number;
   verifier?: string;
+  generator?: string;
+  is_fallback?: boolean;
+  searched_for?: string;
+  missing?: string;
   nli_score?: number;
   nli_label?: string;
   citations: Citation[];
@@ -221,18 +226,29 @@ export interface AskResponse {
   generation_provider?: string;
   is_fallback?: boolean;
   model_name?: string;
+  conflict_found?: boolean;
+  conflict_subject?: string | null;
+  has_version_chain?: boolean;
   verified_claims: Array<{
     text: string;
+    verdict?: string;
     status: string;
     verifier?: string;
+    generator?: string;
+    is_fallback?: boolean;
     nli_score?: number;
     nli_label?: string;
     citations: Citation[];
   }>;
   blocked_claims: Array<{
     original_claim: string;
+    verdict?: string;
     reason: string;
+    searched_for?: string;
+    missing?: string;
     verifier?: string;
+    generator?: string;
+    is_fallback?: boolean;
     message: string;
   }>;
   calculation?: {

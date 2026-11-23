@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database.session import get_db
-from app.database.models import Clause, Document, Page, QASession, Claim, Citation
+from app.database.models import Clause, Document, Page, QASession, Claim, Citation, Conflict, AmendmentEdge
 from app.retrieval.hybrid import HybridRetriever
 from app.generation.engine import generate_verifiable_answer
 from app.verification.gate import run_verification_gate
@@ -77,6 +77,29 @@ async def ask_question(
         verified_texts = [c["text"] for c in gate_result["verified_claims"]]
         answer_text = " ".join(verified_texts)
 
+    # 5. Check contextual conflict and version chain metadata
+    conflict_found = False
+    conflict_subject = None
+    stmt_conflicts = select(Conflict).where(Conflict.resolution_status != "RESOLVED_AMENDMENT")
+    res_conf = await db.execute(stmt_conflicts)
+    active_conflicts = res_conf.scalars().all()
+    retrieved_clause_ids = {q.get("id") for q in retrieved_quotes}
+
+    for cf in active_conflicts:
+        if cf.clause_a_id in retrieved_clause_ids or cf.clause_b_id in retrieved_clause_ids:
+            conflict_found = True
+            conflict_subject = cf.subject or "interest_rate"
+            break
+        if cf.subject and cf.subject.replace("_", " ") in req.query.lower():
+            conflict_found = True
+            conflict_subject = cf.subject
+            break
+
+    stmt_edges = select(AmendmentEdge)
+    res_edges = await db.execute(stmt_edges)
+    edges = res_edges.scalars().all()
+    has_version_chain = len(edges) > 0
+
     session = QASession(
         query_text=req.query,
         answer_text=answer_text,
@@ -127,5 +150,8 @@ async def ask_question(
         "generation_provider": gen_result.get("generation_provider", "extractive-fallback"),
         "is_fallback": gen_result.get("is_fallback", True),
         "model_name": gen_result.get("model_name", "none"),
+        "conflict_found": conflict_found,
+        "conflict_subject": conflict_subject,
+        "has_version_chain": has_version_chain,
         "retrieved_quotes": retrieved_quotes
     }
