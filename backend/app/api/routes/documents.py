@@ -13,6 +13,7 @@ from app.schemas.document import (
     ClauseResponse,
     IngestionJobResponse
 )
+from app.ingestion.pipeline import run_document_ingestion_pipeline
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -57,20 +58,30 @@ async def upload_document(
         document_type=document_type,
         domain=domain,
         issuer=issuer,
-        status="UPLOADED"
+        status="PROCESSING"
     )
     db.add(doc)
     await db.flush()
 
     job = IngestionJob(
         document_id=doc.id,
-        status="QUEUED",
-        progress=0.0
+        status="PROCESSING",
+        progress=0.1
     )
     db.add(job)
     await db.commit()
     await db.refresh(doc)
 
+    # Execute full pipeline synchronously or via background task
+    try:
+        await run_document_ingestion_pipeline(doc.id, db)
+    except Exception as e:
+        doc.status = "FAILED"
+        job.status = "FAILED"
+        job.error_message = str(e)
+        await db.commit()
+
+    await db.refresh(doc)
     return doc
 
 @router.get("", response_model=DocumentListResponse)
@@ -133,7 +144,6 @@ async def delete_document(document_id: str, db: AsyncSession = Depends(get_db)):
 @router.post("/{document_id}/process", response_model=IngestionJobResponse)
 async def process_document(
     document_id: str,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
     doc = await db.get(Document, document_id)
@@ -143,13 +153,21 @@ async def process_document(
     job = IngestionJob(
         document_id=doc.id,
         status="PROCESSING",
-        progress=0.1
+        progress=0.5
     )
-    doc.status = "PROCESSING"
     db.add(job)
     await db.commit()
-    await db.refresh(job)
 
+    try:
+        await run_document_ingestion_pipeline(doc.id, db)
+        job.status = "COMPLETED"
+        job.progress = 1.0
+    except Exception as e:
+        job.status = "FAILED"
+        job.error_message = str(e)
+
+    await db.commit()
+    await db.refresh(job)
     return job
 
 @router.get("/{document_id}/status", response_model=IngestionJobResponse)

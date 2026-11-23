@@ -1,62 +1,33 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: veritas-postgres
-    environment:
-      POSTGRES_USER: veritas
-      POSTGRES_PASSWORD: veritas_secret
-      POSTGRES_DB: veritas_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U veritas -d veritas_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  qdrant:
-    image: qdrant/qdrant:v1.8.4
-    container_name: veritas-qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: veritas-backend
-    environment:
-      - DATABASE_URL=postgresql+psycopg://veritas:veritas_secret@postgres:5432/veritas_db
-      - SYNC_DATABASE_URL=postgresql+psycopg://veritas:veritas_secret@postgres:5432/veritas_db
-      - QDRANT_URL=http://qdrant:6333
-      - ENVIRONMENT=production
+    container_name: verifydoc-backend
     ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_started
+      - "8001:8001"
     volumes:
-      - ./storage:/app/storage
+      - verifydoc-data:/app/storage
+    environment:
+      - VERITAS_PORT=8001
+      - VERITAS_HOST=0.0.0.0
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: veritas-frontend
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: verifydoc-frontend
     ports:
       - "5173:80"
     depends_on:
       - backend
+    restart: unless-stopped
 
 volumes:
-  pgdata:
-  qdrant_data:
+  verifydoc-data:

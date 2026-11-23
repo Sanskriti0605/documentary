@@ -7,6 +7,7 @@ import { EvidenceChat } from './pages/EvidenceChat';
 import { ContradictionCentre } from './pages/ContradictionCentre';
 import { AmendmentExplorer } from './pages/AmendmentExplorer';
 import { PdfViewerPage } from './pages/PdfViewerPage';
+import { EvaluationPage } from './pages/EvaluationPage';
 
 export const App: React.FC = () => {
   return (
@@ -19,6 +20,7 @@ export const App: React.FC = () => {
           <Route path="contradictions" element={<ContradictionCentre />} />
           <Route path="amendments" element={<AmendmentExplorer />} />
           <Route path="viewer" element={<PdfViewerPage />} />
+          <Route path="eval" element={<EvaluationPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

@@ -1,0 +1,63 @@
+{
+  "test_cases": [
+    {
+      "id": "TC_01_SPLIT_PAGE",
+      "category": "SPLIT_PAGE_STITCHING",
+      "question": "What is the foreclosure fee for prepayment of the personal loan facility?",
+      "expected_status": "VERIFIED",
+      "expected_document": "BNB_Personal_Loan_Agreement.pdf",
+      "expected_pages": [1, 2],
+      "expected_key_fact": "3.0% on the outstanding principal balance",
+      "trap_description": "Clause 7.2 begins on Page 1 and concludes on Page 2 with the 3.0% fee condition."
+    },
+    {
+      "id": "TC_02_NUMBER_CONFLICT",
+      "category": "CONTRADICTION_DETECTION",
+      "question": "What is the agreed rate of interest for Rajesh Sharma's personal loan?",
+      "expected_status": "CONFLICTED",
+      "conflicting_documents": [
+        "BNB_Personal_Loan_Agreement.pdf",
+        "BNB_Loan_Sanction_Letter.pdf"
+      ],
+      "conflicting_values": {
+        "BNB_Personal_Loan_Agreement.pdf": "12.5%",
+        "BNB_Loan_Sanction_Letter.pdf": "11.0%"
+      },
+      "trap_description": "Loan Agreement Clause 3.1 states 12.5% while Sanction Letter states 11.0% fixed."
+    },
+    {
+      "id": "TC_03_AMENDMENT_CHAIN",
+      "category": "AMENDMENT_TRACKING",
+      "question": "What is the current penal charge rate for personal loan default in force as of 2026?",
+      "expected_status": "VERIFIED",
+      "amendment_chain": [
+        "BNB_Retail_Loan_Policy_2023.pdf (2.0%)",
+        "RBI_Fair_Lending_Circular_2024.pdf (2.5% cap)",
+        "BNB_Loan_Policy_Amendment_2025.pdf (1.75%)"
+      ],
+      "expected_active_rate": "1.75%",
+      "trap_description": "Full 3-step amendment chain where 2023 rate was 2.0%, RBI capped at 2.5% in 2024, and 2025 amendment substituted it with 1.75%."
+    },
+    {
+      "id": "TC_04_ABSTENTION_MISSING_EVIDENCE",
+      "category": "EVIDENCE_ABSTENTION",
+      "question": "What is the interest subvention percentage for agricultural tractor loans?",
+      "expected_status": "INSUFFICIENT_EVIDENCE",
+      "expected_claims_count": 0,
+      "expected_abstention": true,
+      "trap_description": "Documents only cover retail lending. The system must strictly abstain and say evidence is missing."
+    },
+    {
+      "id": "TC_05_DETERMINISTIC_CALCULATION",
+      "category": "FINANCIAL_CALCULATION",
+      "question": "Calculate the processing fee with 18% GST for a personal loan of INR 500,000.",
+      "expected_status": "VERIFIED",
+      "source_document": "BNB_Schedule_of_Charges.pdf",
+      "calculation_type": "PROCESSING_FEE",
+      "expected_raw_fee": 7500.0,
+      "expected_gst": 1350.0,
+      "expected_total": 8850.0,
+      "trap_description": "1.50% of 500,000 = 7,500 (within Min 1,000 and Max 10,000 bounds) + 18% GST = 8,850."
+    }
+  ]
+}

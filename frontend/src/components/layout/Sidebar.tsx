@@ -13,10 +13,11 @@ import {
 const navigationItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Document Library', path: '/documents', icon: FileText },
-  { name: 'Evidence Chat', path: '/chat', icon: MessageSquareQuote },
+  { name: 'Ask VerifyDoc', path: '/chat', icon: MessageSquareQuote },
   { name: 'Contradiction Centre', path: '/contradictions', icon: AlertTriangle },
   { name: 'Amendment Explorer', path: '/amendments', icon: GitBranch },
   { name: 'PDF Evidence Viewer', path: '/viewer', icon: FileSearch },
+  { name: 'Evaluation Benchmark', path: '/eval', icon: Scale },
 ];
 
 export const Sidebar: React.FC = () => {

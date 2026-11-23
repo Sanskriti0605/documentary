@@ -1,7 +1,6 @@
 import axios from 'axios';
 import {
   DocumentItem,
-  QuerySession,
   ConflictItem,
   AmendmentGraph,
   TimelineItem,
@@ -16,6 +15,53 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+export interface AskResponse {
+  session_id: string;
+  query: string;
+  answer: string;
+  status: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'CONFLICTED' | 'INSUFFICIENT_EVIDENCE';
+  faithfulness_score: number;
+  generated_count: number;
+  verified_count: number;
+  blocked_count: number;
+  verified_claims: Array<{
+    text: string;
+    status: string;
+    citations: Array<{
+      quote: string;
+      document_name: string;
+      page_number: number;
+      clause_number?: string;
+      bounding_box?: number[];
+    }>;
+  }>;
+  blocked_claims: Array<{
+    original_claim: string;
+    reason: string;
+    message: string;
+  }>;
+  calculation?: {
+    type: string;
+    result: any;
+    summary: string;
+  };
+  retrieved_quotes: Array<any>;
+}
+
+export interface EvalBenchmarkResponse {
+  total_test_cases: number;
+  passed: number;
+  failed: number;
+  accuracy_percentage: number;
+  results: Array<{
+    test_case_id: string;
+    category: string;
+    question: string;
+    status: 'PASSED' | 'FAILED';
+    details: any;
+  }>;
+}
 
 export const systemService = {
   getHealth: async (): Promise<SystemHealth> => {
@@ -59,17 +105,13 @@ export const documentService = {
   },
 };
 
-export const queryService = {
-  submitQuery: async (query: string, documentIds?: string[], asOfDate?: string): Promise<QuerySession> => {
-    const res = await api.post<QuerySession>('/query', {
+export const askService = {
+  ask: async (query: string, documentIds?: string[], asOfDate?: string): Promise<AskResponse> => {
+    const res = await api.post<AskResponse>('/ask', {
       query,
       document_ids: documentIds,
       as_of_date: asOfDate,
     });
-    return res.data;
-  },
-  getQuery: async (id: string): Promise<QuerySession> => {
-    const res = await api.get<QuerySession>(`/query/${id}`);
     return res.data;
   },
 };
@@ -96,6 +138,13 @@ export const amendmentService = {
   },
   getTimeline: async (): Promise<TimelineItem[]> => {
     const res = await api.get<TimelineItem[]>('/amendments/timeline');
+    return res.data;
+  },
+};
+
+export const evalService = {
+  runEvaluation: async (): Promise<EvalBenchmarkResponse> => {
+    const res = await api.get<EvalBenchmarkResponse>('/eval/run');
     return res.data;
   },
 };
