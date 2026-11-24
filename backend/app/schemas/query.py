@@ -33,6 +33,7 @@ class QueryRequest(BaseModel):
     document_ids: Optional[List[str]] = Field(default=None, description="Optional filter of document IDs to query against")
     as_of_date: Optional[Any] = Field(default=None, description="Temporal reference date for rule applicability")
     as_of: Optional[Any] = Field(default=None, description="Alternative alias for as_of_date")
+    response_language: Optional[str] = Field(default="auto", description="Target response language: 'auto', 'en', or 'hi'")
 
 class QueryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -46,6 +47,13 @@ class QueryResponse(BaseModel):
     claims: List[ClaimResponse] = []
     version_chain: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
+    requested_language: Optional[str] = "auto"
+    detected_language: Optional[str] = "en"
+    answer_language: Optional[str] = "en"
+    translation_status: Optional[str] = "not_needed"
+    translator: Optional[str] = "none"
+    english_answer: Optional[str] = None
+    english_query: Optional[str] = None
 
 class EvidenceDetailResponse(BaseModel):
     session_id: str

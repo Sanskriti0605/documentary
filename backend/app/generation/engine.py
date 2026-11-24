@@ -55,55 +55,77 @@ You MUST output valid, parseable JSON strictly matching this schema:
 }
 """
 
-def extract_calculation_intent(query: str, quotes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def extract_calculation_intent(
+    query: str,
+    quotes: List[Dict[str, Any]],
+    target_language: str = "en",
+    original_query: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """Detect if the query asks for EMI or penalty arithmetic and extract parameters from query and quotes."""
-    q_lower = query.lower()
+    from app.intelligence.multilingual import normalize_devanagari_digits, translate_calculation_result
+    combined_query = f"{original_query or ''} {query}".strip()
+    norm_query = normalize_devanagari_digits(combined_query)
+    q_lower = norm_query.lower()
 
     # Look for EMI calculation request
-    if "emi" in q_lower or "monthly installment" in q_lower or "equated monthly" in q_lower:
+    if "emi" in q_lower or "monthly installment" in q_lower or "equated monthly" in q_lower or "ईएमआई" in q_lower or "किस्त" in q_lower:
         principal = Decimal("100000.00")
         rate = Decimal("12.00")
         tenure = 24
 
-        loan_amt_match = re.search(r"(?:rs\.?|inr|loan\s+(?:of|amount))\s*[:\-]?\s*([0-9,]+)", query, re.IGNORECASE)
+        loan_amt_match = re.search(r"(?:rs\.?|inr|रुपये|रुपया|रू\.?|loan\s+(?:of|amount))\s*[:\-]?\s*([0-9,]+)", norm_query, re.IGNORECASE)
+        if not loan_amt_match:
+            loan_amt_match = re.search(r"([0-9,]+)\s*(?:rs\.?|inr|रुपये|रुपया|रू\.?)", norm_query, re.IGNORECASE)
         if loan_amt_match:
             try:
                 principal = Decimal(loan_amt_match.group(1).replace(",", ""))
             except Exception:
                 pass
 
-        tenure_match = re.search(r"([0-9]+)\s*(?:months|yrs|years)", query, re.IGNORECASE)
+        tenure_match = re.search(r"([0-9]+)\s*(?:months|yrs|years|माह|महीने|साल|वर्ष)", norm_query, re.IGNORECASE)
         if tenure_match:
             t_val = int(tenure_match.group(1))
-            tenure = t_val if "month" in tenure_match.group(0) else t_val * 12
+            m_str = tenure_match.group(0).lower()
+            tenure = t_val if any(k in m_str for k in ["month", "माह", "महीने"]) else t_val * 12
 
-        rate_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*%", query)
+        rate_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*(?:%|प्रतिशत|फीसदी)", norm_query)
         if rate_match:
             rate = Decimal(rate_match.group(1))
 
         calc_result = calculate_emi(principal, rate, tenure)
-        return {
+        res_dict = {
             "type": "EMI",
             "result": calc_result,
             "summary": f"Calculated EMI: INR {calc_result['monthly_emi']} per month for INR {principal} at {rate}% over {tenure} months."
         }
+        if target_language == "hi":
+            res_dict = translate_calculation_result(res_dict)
+        return res_dict
 
-    # Look for penal charges calculation
-    if "penal charge" in q_lower or "penalty" in q_lower or "overdue" in q_lower or "penal interest" in q_lower:
+    # Look for penal charges calculation (exclude prepayment penalty / foreclosure)
+    is_prepayment = any(p in q_lower for p in ["prepayment", "pre-payment", "foreclosure", "समयपूर्व", "फोरक्लोज़र", "फोरक्लोजर"])
+    if not is_prepayment and any(k in q_lower for k in [
+        "penal charge", "penal charges", "penal interest", "default interest", "late payment",
+        "पेनल ब्याज", "पेनल चार्ज", "दंडात्मक ब्याज", "दंडात्मक शुल्क", "विलंब शुल्क"
+    ]):
         overdue = Decimal("50000.00")
         penal_rate = Decimal("3.00")
         days = 30
 
-        # Extract overdue amount
-        overdue_match = re.search(r"overdue\s+(?:amount\s+)?(?:of\s+)?(?:rs\.?|inr)?\s*([0-9,]+)", query, re.IGNORECASE)
+        # Extract overdue amount: prioritize 4+ digit numbers or numbers near rupee/overdue
+        overdue_match = re.search(r"([0-9,]{4,})\s*(?:rs\.?|inr|रुपये|रुपया|रु\.?|रू\.?)?", norm_query, re.IGNORECASE)
+        if not overdue_match:
+            overdue_match = re.search(r"([0-9,]+)\s*(?:rs\.?|inr|रुपये|रुपया|रु\.?|रू\.?)?\s*(?:बकाया|overdue)", norm_query, re.IGNORECASE)
+        if not overdue_match:
+            overdue_match = re.search(r"(?:overdue|बकाया)\s+(?:amount\s+)?(?:of\s+)?(?:rs\.?|inr|रुपये|रुपया|रु\.?|रू\.?)?\s*([0-9,]+)", norm_query, re.IGNORECASE)
         if overdue_match:
             try:
                 overdue = Decimal(overdue_match.group(1).replace(",", ""))
             except Exception:
                 pass
 
-        # Extract days
-        days_match = re.search(r"([0-9]+)\s*days?", query, re.IGNORECASE)
+        # Extract days: '30 दिन' or '30 days'
+        days_match = re.search(r"([0-9]+)\s*(?:days?|दिन)", norm_query, re.IGNORECASE)
         if days_match:
             try:
                 days = int(days_match.group(1))
@@ -124,11 +146,14 @@ def extract_calculation_intent(query: str, quotes: List[Dict[str, Any]]) -> Opti
         # Pure base penalty: (overdue * penal_rate% * days) / 365
         base_penalty = (overdue * (penal_rate / Decimal("100")) * Decimal(days)) / Decimal("365")
         calc_result = calculate_penal_charges(overdue, penal_rate, days)
-        return {
+        res_dict = {
             "type": "PENALTY",
             "result": calc_result,
             "summary": f"Calculated Penal Interest: Rs. {base_penalty:.2f} ({overdue} x {penal_rate}% x {days}/365) for {days} days overdue at {penal_rate}% p.a."
         }
+        if target_language == "hi":
+            res_dict = translate_calculation_result(res_dict)
+        return res_dict
 
     # Look for processing fee calculation
     if "processing fee" in q_lower or "schedule of charges" in q_lower:
@@ -229,13 +254,15 @@ async def generate_verifiable_answer(
     retrieved_quotes: List[Dict[str, Any]],
     as_of_date: Optional[str] = None,
     temporal_guidance: Optional[str] = None,
-    version_chain: Optional[List[Dict[str, Any]]] = None
+    version_chain: Optional[List[Dict[str, Any]]] = None,
+    target_language: str = "en",
+    original_query: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Coordinates LLM generation via configured provider (OpenRouter Nemotron / Ollama)
     and mathematical calculations. Outputs structured claims and citations for the verification gate.
     """
-    calc_data = extract_calculation_intent(query, retrieved_quotes)
+    calc_data = extract_calculation_intent(query, retrieved_quotes, target_language=target_language, original_query=original_query)
 
     # Format retrieved quotes with dual aliases [EV-xxx] and [Qx]
     quotes_prompt_list = []

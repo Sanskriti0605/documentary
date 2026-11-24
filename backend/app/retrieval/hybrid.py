@@ -79,27 +79,35 @@ class HybridRetriever:
         top_k: int = 5,
         rrf_k: int = 60,
         doc_filter: Optional[List[str]] = None,
-        as_of_date: Optional[str] = None
+        as_of_date: Optional[str] = None,
+        english_query: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Executes Reciprocal Rank Fusion (RRF) between Dense (BGE-M3) and BM25 retrievers.
         Applies authority tier ranking and expands parent-section context.
+        Uses english_query for BM25 when query is non-English, and dual queries for dense.
         """
         if not self.corpus:
             return []
 
         sub_queries = decompose_query(query)
+        search_queries_en = decompose_query(english_query) if english_query and english_query.strip() != query.strip() else sub_queries
+
         rrf_scores: Dict[int, float] = {}
         dense_hits_map: Dict[int, float] = {}
         bm25_hits_map: Dict[int, float] = {}
         retrieval_mode = "hybrid (BGE-M3 dense + BM25 lexical)"
 
-        for sq in sub_queries:
+        # BM25 lexical search using English tokens
+        for sq in search_queries_en:
             bm25_results = self.search_bm25(sq, top_k=top_k * 3)
             for rank, (idx, score) in enumerate(bm25_results):
                 bm25_hits_map[idx] = max(bm25_hits_map.get(idx, 0.0), score)
                 rrf_scores[idx] = rrf_scores.get(idx, 0.0) + (1.0 / (rrf_k + rank + 1))
 
+        # Dense search using both original and English queries
+        all_dense_queries = list(dict.fromkeys(sub_queries + (search_queries_en if english_query else [])))
+        for sq in all_dense_queries:
             try:
                 dense_results = self.search_dense(sq, top_k=top_k * 3, doc_filter=doc_filter)
                 for rank, (idx, score) in enumerate(dense_results):

@@ -117,11 +117,17 @@ export const pdfService = {
 };
 
 export const askService = {
-  ask: async (query: string, documentIds?: string[], asOfDate?: string): Promise<AskResponse> => {
+  ask: async (
+    query: string,
+    documentIds?: string[],
+    asOfDate?: string,
+    responseLanguage?: 'auto' | 'en' | 'hi'
+  ): Promise<AskResponse> => {
     const res = await api.post<AskResponse>('/ask', {
       query,
       document_ids: documentIds,
       as_of_date: asOfDate,
+      response_language: responseLanguage,
     });
     return res.data;
   },

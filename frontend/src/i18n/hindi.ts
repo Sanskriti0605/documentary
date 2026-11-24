@@ -1,0 +1,18 @@
+export const HINDI_UI = {
+  VERIFIED: 'सत्यापित (VERIFIED)',
+  BLOCKED: 'अवरुद्ध (BLOCKED)',
+  FAITHFULNESS: 'सटीकता (Faithfulness)',
+  RESPONSE_SUMMARY: 'उत्तर सारांश (Response Summary)',
+  INSUFFICIENT_EVIDENCE: 'अपर्याप्त साक्ष्य (Insufficient Evidence)',
+  ABSTENTION_MESSAGE: 'इस प्रश्न का उत्तर देने के लिए पर्याप्त दस्तावेजी साक्ष्य उपलब्ध नहीं हैं। (Insufficient documentary evidence to answer this question.)',
+  AS_OF_LABEL: 'प्रभावी तिथि (Evaluation As-Of Date):',
+  CONFLICT_CHIP: 'विरोधाभास पाया गया (Conflict found)',
+  SHOW_ENGLISH: 'अंग्रेजी मूल देखें (Show English Original)',
+  SHOW_HINDI: 'हिंदी अनुवाद देखें (Show Hindi)',
+  TRANSLATION_UNAVAILABLE_BANNER: 'वर्तमान में हिंदी अनुवाद अनुपलब्ध है: सत्यापित अंग्रेजी उत्तर दिखाया जा रहा है। (Hindi translation unavailable right now: showing the verified English answer.)',
+  CLAIMS_TITLE: 'दावे और सत्यापन निर्णय (Claims & Verification Gate Verdicts)',
+  VERSION_CHAIN: 'संस्करण श्रृंखला (Version Chain)',
+  CALCULATION_TITLE: 'वित्तीय गणना (Financial Calculation)',
+  EVALUATING: 'साक्ष्य का सत्यापन किया जा रहा है... (Verifying Evidence...)',
+  SUBMIT_BUTTON: 'सत्यापित उत्तर पूछें (Ask VerifyDoc)',
+};

@@ -331,6 +331,13 @@ export interface LLMHealth {
   reachable?: boolean;
 }
 
+export interface QueryRequest {
+  query: string;
+  document_ids?: string[];
+  as_of_date?: string;
+  response_language?: 'auto' | 'en' | 'hi';
+}
+
 export interface AskResponse {
   session_id: string;
   query: string;
@@ -348,6 +355,13 @@ export interface AskResponse {
   has_version_chain?: boolean;
   as_of_date?: string | null;
   temporal_guidance?: string | null;
+  requested_language?: string;
+  detected_language?: string;
+  answer_language?: string;
+  translation_status?: 'translated' | 'not_needed' | 'unavailable' | string;
+  translator?: string | null;
+  english_answer?: string | null;
+  english_query?: string | null;
   version_chain?: Array<{
     document_name: string;
     document_type?: string;

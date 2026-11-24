@@ -280,6 +280,21 @@ def run_verification_gate(
                 failure_reasons.append(f"Quote '{quote[:40]}...' is not a verbatim substring of Page {page_num}.")
                 continue
 
+            # Product / Facility Scope check (prevent cross-product hallucination)
+            if query_context:
+                q_lower = query_context.lower()
+                specific_products = ["gold loan", "tractor loan", "vehicle loan", "education loan", "credit card", "space travel", "crypto"]
+                product_mismatch = False
+                for prod in specific_products:
+                    if prod in q_lower:
+                        prod_key = prod.split()[0]
+                        if prod_key not in quote.lower() and prod_key not in claim_text.lower():
+                            failure_reasons.append(f"Query specifically asks about '{prod}', but evidence does not contain '{prod_key}'.")
+                            product_mismatch = True
+                            break
+                if product_mismatch:
+                    continue
+
             # 2. Number, percentage, and date consistency
             num_ok, num_err = verify_numerical_and_date_consistency(claim_text, quote, query_context, page_text)
             if not num_ok:

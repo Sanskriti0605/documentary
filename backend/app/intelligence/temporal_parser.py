@@ -43,6 +43,9 @@ def extract_as_of_date(query: str, explicit_as_of: Optional[Any] = None) -> date
     if not query:
         return date.today()
 
+    from app.intelligence.multilingual import normalize_hindi_temporal_and_numbers
+    query = normalize_hindi_temporal_and_numbers(query)
+
     q_lower = query.lower()
 
     # If explicit mention of 'currently', 'today', 'now', return today
