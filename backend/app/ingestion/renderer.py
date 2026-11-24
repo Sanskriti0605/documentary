@@ -3,7 +3,8 @@ import hashlib
 from typing import Optional, List, Tuple
 import fitz  # PyMuPDF
 from app.core.config import settings
-from app.ingestion.quote_matcher import find_quote_boxes_on_page
+
+RENDER_VERSION = 2
 
 CLAUSE_COLOR_PALETTE = [
     {"stroke": (0.92, 0.55, 0.0), "fill": (1.0, 0.90, 0.35)},  # Amber / Gold
@@ -21,23 +22,18 @@ def render_pdf_page_image(
     highlight_bboxes: Optional[List[List[float]]] = None,
     quote: Optional[str] = None,
     all_bboxes: Optional[List[List[float]]] = None,
+    burn_highlights: bool = False,
     dpi: int = 150
 ) -> Tuple[str, float, float]:
     """
     Renders a specific PDF page to a PNG image file.
-    Draws multi-colored bounding boxes for different extracted clauses.
-    Supports multi-line highlight rectangles for quotes.
+    DEFAULT BEHAVIOR: Returns a 100% CLEAN page render with zero baked overlays.
+    Highlights and overlays are drawn client-side in the frontend viewer.
+    Burned-in overlays are ONLY drawn if burn_highlights=True (e.g. for static PDF exports).
     Returns (out_path, page_width, page_height).
     """
     os.makedirs(settings.RENDERED_DIR, exist_ok=True)
     base_name = os.path.splitext(os.path.basename(file_path))[0]
-
-    # Normalize primary highlight boxes
-    primary_boxes: List[List[float]] = []
-    if highlight_bboxes:
-        primary_boxes.extend([b for b in highlight_bboxes if b and len(b) == 4])
-    elif highlight_bbox and len(highlight_bbox) == 4:
-        primary_boxes.append(highlight_bbox)
 
     doc = fitz.open(file_path)
     if page_number < 1 or page_number > len(doc):
@@ -47,14 +43,29 @@ def render_pdf_page_image(
     page_width = float(page.rect.width)
     page_height = float(page.rect.height)
 
-    # If quote provided and no explicit boxes, find multi-line boxes
-    if quote and not primary_boxes:
-        found_q_boxes = find_quote_boxes_on_page(page, quote)
-        if found_q_boxes:
-            primary_boxes.extend(found_q_boxes)
+    # Clean rendering path (default)
+    if not burn_highlights:
+        out_filename = f"{base_name}_page_{page_number}_clean_v{RENDER_VERSION}_dpi{dpi}.png"
+        out_path = os.path.join(settings.RENDERED_DIR, out_filename)
+        if os.path.exists(out_path):
+            doc.close()
+            return out_path, page_width, page_height
 
-    # Generate unique cached filename based on highlights
-    hl_key = ""
+        zoom = dpi / 72.0
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat)
+        pix.save(out_path)
+        doc.close()
+        return out_path, page_width, page_height
+
+    # Burned-in rendering path (explicit burn=1 export only)
+    primary_boxes: List[List[float]] = []
+    if highlight_bboxes:
+        primary_boxes.extend([b for b in highlight_bboxes if b and len(b) == 4])
+    elif highlight_bbox and len(highlight_bbox) == 4:
+        primary_boxes.append(highlight_bbox)
+
+    hl_key = "_burned"
     if primary_boxes:
         boxes_str = ";".join(",".join(str(int(v)) for v in b) for b in primary_boxes)
         hl_hash = hashlib.md5(boxes_str.encode()).hexdigest()[:8]
@@ -64,14 +75,13 @@ def render_pdf_page_image(
         short_hash = hashlib.md5(bboxes_raw.encode()).hexdigest()[:8]
         hl_key += f"_all_{short_hash}"
 
-    out_filename = f"{base_name}_page_{page_number}{hl_key}.png"
+    out_filename = f"{base_name}_page_{page_number}{hl_key}_v{RENDER_VERSION}_dpi{dpi}.png"
     out_path = os.path.join(settings.RENDERED_DIR, out_filename)
 
     if os.path.exists(out_path):
         doc.close()
         return out_path, page_width, page_height
 
-    # 1. Draw multi-colored clause bounding boxes
     if all_bboxes:
         for idx, b in enumerate(all_bboxes):
             if len(b) == 4:
@@ -83,7 +93,6 @@ def render_pdf_page_image(
                 annot.set_opacity(0.60 if is_primary else 0.30)
                 annot.update()
 
-    # 2. Draw active primary highlight boxes (e.g. multi-line quote boxes)
     for pb in primary_boxes:
         if len(pb) == 4:
             rect = fitz.Rect(pb[0], pb[1], pb[2], pb[3])

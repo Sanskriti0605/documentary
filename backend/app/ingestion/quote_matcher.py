@@ -233,6 +233,25 @@ def find_quote_boxes_on_page(
             y1 = min(round(page.rect.height, 2), round(max(w["y1"] for w in seg) + 0.5, 2))
             matched_boxes.append([x0, y0, x1, y1])
 
+    # HARD SAFETY LIMITS:
+    # 1. Reject if total highlight area exceeds 8% of page area
+    # 2. Reject if any rectangle height exceeds 2.5x median line height
+    # 3. Reject if any rectangle is wider than 92% of page width
+    if matched_boxes:
+        page_area = page.rect.width * page.rect.height
+        total_hl_area = sum((b[2] - b[0]) * (b[3] - b[1]) for b in matched_boxes)
+        if total_hl_area > 0.08 * page_area:
+            return []
+
+        line_heights = [b[3] - b[1] for b in matched_boxes]
+        median_h = sorted(line_heights)[len(line_heights) // 2]
+        max_allowed_h = max(24.0, 2.5 * median_h)
+        for b in matched_boxes:
+            box_h = b[3] - b[1]
+            box_w = b[2] - b[0]
+            if box_h > max_allowed_h or box_w > 0.92 * page.rect.width:
+                return []
+
     return matched_boxes
 
 def locate_quote_with_cross_page(

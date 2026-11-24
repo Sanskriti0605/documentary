@@ -116,13 +116,16 @@ async def get_pdf_page_image(
     bbox: Optional[str] = None,       # single comma-separated x0,y0,x1,y1
     bboxes: Optional[str] = None,     # semicolon-separated multi-line boxes x0,y0,x1,y1;x0,y2,x1,y3
     quote: Optional[str] = None,      # quote text for dynamic multi-line calculation
-    highlight_all: bool = True,
+    highlight_all: bool = Query(False, description="Whether to include all clause bboxes (only used if burn=True)"),
+    burn: bool = Query(False, description="Whether to bake highlights directly into the PNG bytes (export only)"),
+    dpi: int = Query(150, description="Rendering resolution DPI"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Renders and returns a high-resolution PNG image of the requested PDF page.
-    Overlays multi-line highlight rectangles for quotes (filtering rotated watermarks).
-    If highlight_all=True, also highlights all segmented clauses on this page.
+    DEFAULT: Returns a 100% clean page render without any baked overlays.
+    Highlights and overlays are rendered client-side from coordinates in the frontend.
+    If burn=True, bakes highlight rectangles into the PNG (for PDF/image export only).
     """
     doc, file_path = await resolve_document_file_path(document_name, db)
     target_doc_id = doc.id if doc else document_name
@@ -142,7 +145,7 @@ async def get_pdf_page_image(
             pass
 
     all_bboxes = None
-    if highlight_all and target_doc_id:
+    if burn and highlight_all and target_doc_id:
         clause_stmt = (
             select(Clause.bounding_box)
             .join(Page, Clause.page_id == Page.id)
@@ -158,7 +161,9 @@ async def get_pdf_page_image(
             page_number,
             highlight_bboxes=parsed_bboxes if parsed_bboxes else None,
             quote=quote,
-            all_bboxes=all_bboxes
+            all_bboxes=all_bboxes,
+            burn_highlights=burn,
+            dpi=dpi
         )
 
         headers = {

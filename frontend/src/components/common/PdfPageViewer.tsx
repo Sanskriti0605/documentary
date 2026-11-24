@@ -66,6 +66,11 @@ export const PdfPageViewer: React.FC<PdfPageViewerProps> = ({
   const [imageLoading, setImageLoading] = useState<boolean>(false);
   const [hoveredClauseId, setHoveredClauseId] = useState<string | null>(null);
 
+  const isDebugBoxes = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('debug') === 'boxes';
+  }, []);
+
   const viewerContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
@@ -421,7 +426,7 @@ export const PdfPageViewer: React.FC<PdfPageViewerProps> = ({
           {/* DRAWING HIGHLIGHT RECTANGLES: Skipped entirely when showHighlights is false */}
           {showHighlights && (
             <>
-              {/* 1. Target Citation Quote Highlight (Amber) */}
+              {/* 1. Target Citation Quote Highlight: Single soft amber layer (~30% fill, 1px border) */}
               {quoteHighlight?.found &&
                 quoteHighlight.boxes.map((box, idx) => {
                   const leftPct = (box[0] / currentDims.width) * 100;
@@ -439,66 +444,59 @@ export const PdfPageViewer: React.FC<PdfPageViewerProps> = ({
                         width: `${widthPct}%`,
                         height: `${heightPct}%`,
                       }}
-                      className="absolute bg-amber-400/45 border-2 border-amber-600 rounded z-30 shadow-xs ring-2 ring-amber-400/80 pointer-events-auto transition-all"
+                      className="absolute bg-amber-400/30 border border-amber-500 rounded-xs z-30 pointer-events-auto transition-all"
                       title={`Target Citation (Line ${idx + 1}): [${box.map(Math.round).join(', ')}]`}
+                    />
+                  );
+                })}
+
+              {/* 2. Clause & section boxes hidden by default; rendered ONLY when ?debug=boxes query param is present */}
+              {isDebugBoxes &&
+                activePageClauses.map((c, idx) => {
+                  const b = c.bounding_box!;
+                  const isSelected = selectedClauseId === c.id;
+                  const isHovered = hoveredClauseId === c.id;
+
+                  const leftPct = (b[0] / currentDims.width) * 100;
+                  const topPct = (b[1] / currentDims.height) * 100;
+                  const widthPct = ((b[2] - b[0]) / currentDims.width) * 100;
+                  const heightPct = ((b[3] - b[1]) / currentDims.height) * 100;
+
+                  return (
+                    <div
+                      key={`other-clause-${c.id}`}
+                      data-testid="other-clause-rect"
+                      onMouseEnter={() => setHoveredClauseId(c.id)}
+                      onMouseLeave={() => setHoveredClauseId(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClauseSelect?.(c);
+                      }}
+                      style={{
+                        left: `${leftPct}%`,
+                        top: `${topPct}%`,
+                        width: `${widthPct}%`,
+                        height: `${heightPct}%`,
+                      }}
+                      title={`Clause ${c.clause_number || ''}: ${c.section_title || ''}`}
+                      className={`absolute cursor-pointer transition-all rounded ${
+                        isSelected
+                          ? 'border-2 border-blue-600 bg-blue-300/40 z-20 shadow-md ring-2 ring-blue-400/80'
+                          : isHovered
+                          ? 'border border-blue-400 bg-blue-100/30 z-15 shadow-2xs'
+                          : 'border border-slate-400/40 hover:border-blue-400 bg-transparent z-10'
+                      }`}
                     >
-                      {idx === 0 && (
-                        <div className="absolute -top-3.5 left-1 z-40 pointer-events-none">
-                          <span className="bg-amber-600 text-white font-bold text-[9px] px-1.5 py-0.2 rounded shadow-2xs uppercase">
-                            Target Citation
+                      {(isSelected || isHovered) && (
+                        <div className="absolute -top-3.5 left-1 z-25 pointer-events-none">
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded shadow-2xs bg-blue-600 text-white">
+                            {c.clause_number || `C${idx + 1}`}
                           </span>
                         </div>
                       )}
                     </div>
                   );
                 })}
-
-              {/* 2. Other Citations in Document: Subtle outline, visible on hover/select */}
-              {activePageClauses.map((c, idx) => {
-                const b = c.bounding_box!;
-                const isSelected = selectedClauseId === c.id;
-                const isHovered = hoveredClauseId === c.id;
-
-                const leftPct = (b[0] / currentDims.width) * 100;
-                const topPct = (b[1] / currentDims.height) * 100;
-                const widthPct = ((b[2] - b[0]) / currentDims.width) * 100;
-                const heightPct = ((b[3] - b[1]) / currentDims.height) * 100;
-
-                return (
-                  <div
-                    key={`other-clause-${c.id}`}
-                    data-testid="other-clause-rect"
-                    onMouseEnter={() => setHoveredClauseId(c.id)}
-                    onMouseLeave={() => setHoveredClauseId(null)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onClauseSelect?.(c);
-                    }}
-                    style={{
-                      left: `${leftPct}%`,
-                      top: `${topPct}%`,
-                      width: `${widthPct}%`,
-                      height: `${heightPct}%`,
-                    }}
-                    title={`Clause ${c.clause_number || ''}: ${c.section_title || ''}`}
-                    className={`absolute cursor-pointer transition-all rounded ${
-                      isSelected
-                        ? 'border-2 border-blue-600 bg-blue-300/40 z-20 shadow-md ring-2 ring-blue-400/80'
-                        : isHovered
-                        ? 'border border-blue-400 bg-blue-100/30 z-15 shadow-2xs'
-                        : 'border border-slate-400/40 hover:border-blue-400 bg-transparent z-10'
-                    }`}
-                  >
-                    {(isSelected || isHovered) && (
-                      <div className="absolute -top-3.5 left-1 z-25 pointer-events-none">
-                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded shadow-2xs bg-blue-600 text-white">
-                          {c.clause_number || `C${idx + 1}`}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
             </>
           )}
         </div>

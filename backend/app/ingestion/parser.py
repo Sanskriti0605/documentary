@@ -157,16 +157,42 @@ def segment_clauses_with_bboxes(
                 clause_num = match.group(1)
                 section_title = match.group(2) if match.group(2) else line_str
 
-                # Find approximate bounding box from spans
-                matching_spans = [s["bbox"] for s in page.spans if s["text"].lower() in line_str.lower()]
-                bbox = None
-                if matching_spans:
-                    bbox = [
-                        min(s[0] for s in matching_spans),
-                        min(s[1] for s in matching_spans),
-                        max(s[2] for s in matching_spans),
-                        max(s[3] for s in matching_spans),
+                # Find tight line-level bounding box for the header line
+                norm_cnum = clause_num.strip().rstrip(".").lower()
+                candidate_anchors = [
+                    s for s in page.spans
+                    if 40.0 < s["bbox"][1] < 780.0
+                    and (s["text"].strip().rstrip(".").lower() == norm_cnum or s["text"].strip().lower().startswith(norm_cnum))
+                ]
+                best_anchor = None
+                for a in candidate_anchors:
+                    same_line_spans = [
+                        s for s in page.spans
+                        if abs(s["bbox"][1] - a["bbox"][1]) < 6.0
+                        and s["text"].strip()
+                        and s["text"].lower() in line_str.lower()
                     ]
+                    line_words = " ".join(s["text"] for s in same_line_spans)
+                    if norm_cnum in line_words.lower():
+                        best_anchor = a
+                        break
+
+                bbox = None
+                if best_anchor:
+                    same_line_spans = [
+                        s for s in page.spans
+                        if abs(s["bbox"][1] - best_anchor["bbox"][1]) < 6.0
+                        and s["text"].strip()
+                        and s["text"].lower() in line_str.lower()
+                    ]
+                    if same_line_spans:
+                        bx0 = round(min(s["bbox"][0] for s in same_line_spans), 2)
+                        by0 = round(min(s["bbox"][1] for s in same_line_spans), 2)
+                        bx1 = round(max(s["bbox"][2] for s in same_line_spans), 2)
+                        by1 = round(max(s["bbox"][3] for s in same_line_spans), 2)
+                        # Safety check: header line height <= 35 pt and area <= 8% of page
+                        if (by1 - by0) <= 35.0 and (bx1 - bx0) * (by1 - by0) <= 0.08 * (595.0 * 842.0):
+                            bbox = [bx0, by0, bx1, by1]
 
                 current_clause = {
                     "page_number": page.page_number,
@@ -181,15 +207,15 @@ def segment_clauses_with_bboxes(
                     current_clause["clause_text"] += " " + line_str
                 else:
                     # Lead-in paragraph or header before first clause
-                    lead_spans = [s["bbox"] for s in page.spans if s["bbox"][1] < 220]
-                    lead_bbox = [72.0, 72.0, 540.0, 180.0]
+                    lead_spans = [s["bbox"] for s in page.spans if 40.0 < s["bbox"][1] < 180.0]
+                    lead_bbox = None
                     if lead_spans:
-                        lead_bbox = [
-                            min(s[0] for s in lead_spans),
-                            min(s[1] for s in lead_spans),
-                            max(s[2] for s in lead_spans),
-                            max(s[3] for s in lead_spans),
-                        ]
+                        lx0 = round(min(s[0] for s in lead_spans), 2)
+                        ly0 = round(min(s[1] for s in lead_spans), 2)
+                        lx1 = round(max(s[2] for s in lead_spans), 2)
+                        ly1 = round(max(s[3] for s in lead_spans), 2)
+                        if (ly1 - ly0) <= 120.0:
+                            lead_bbox = [lx0, ly0, lx1, ly1]
                     current_clause = {
                         "page_number": page.page_number,
                         "clause_number": "Preamble",
