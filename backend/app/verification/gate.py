@@ -1,6 +1,7 @@
 import re
 import logging
 from typing import List, Dict, Any, Tuple, Set, Optional
+from app.intelligence.temporal_parser import parse_date_safely
 
 logger = logging.getLogger("veritas.verification")
 
@@ -50,20 +51,41 @@ def check_verbatim_quote(quote: str, page_text: str) -> bool:
 def extract_entities_for_consistency(text: str) -> Dict[str, Set[str]]:
     """
     Extract numbers, percentages, and dates from text for strict deterministic comparison.
+    Dates and document identifiers (e.g. SYN_01, EV-001) are masked out before extracting quantitative numbers.
     """
     norm = normalize_ws(text)
 
-    # Percentages: 2%, 18.5%, 2 percent
-    percentages = set(re.findall(r"\b\d+(?:\.\d+)?\s*(?:%|percent)\b", norm, re.IGNORECASE))
+    # 1. Extract Dates (ISO, Indian format, Month names)
+    date_patterns = [
+        r"\b\d{4}-\d{2}-\d{2}\b",
+        r"\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b",
+        r"\b\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*,?\s+\d{4}\b"
+    ]
+    dates = set()
+    masked_text = norm
+    for dp in date_patterns:
+        for match in re.finditer(dp, norm, re.IGNORECASE):
+            raw_dt = match.group(0)
+            dates.add(raw_dt)
+            parsed = parse_date_safely(raw_dt)
+            if parsed:
+                dates.add(parsed.strftime("%Y-%m-%d"))
+            masked_text = masked_text.replace(raw_dt, " [DATE] ")
+
+    # Mask document identifiers like SYN_01, EV-001, Q1 so identifier digits are not treated as numbers
+    masked_text = re.sub(r"\b(?:SYN|EV|DOC|Q|REF)[-_]\d+\b", " [DOC_ID] ", masked_text, flags=re.IGNORECASE)
+    # Mask paragraph/clause references like para 4.1 or clause 2.2
+    masked_text = re.sub(r"\b(?:para|clause|paragraph|section)\s+\d+(?:\.\d+)?\b", " [CLAUSE_REF] ", masked_text, flags=re.IGNORECASE)
+
+    # 2. Extract Percentages
+    percentages = set(re.findall(r"\b\d+(?:\.\d+)?\s*(?:%|percent)\b", masked_text, re.IGNORECASE))
     cleaned_percentages = {re.sub(r"\s+", "", p).lower().replace("percent", "%") for p in percentages}
+    for p in percentages:
+        masked_text = masked_text.replace(p, " [PCT] ")
 
-    # Numbers with currency symbols or plain: Rs. 50,000, 50000, 12.5, 36
-    numbers = set(re.findall(r"\b\d+(?:,\d{3})*(?:\.\d+)?\b", norm))
-    # Exclude single digits like clause indices if necessary, but keep quantitative figures
-    cleaned_numbers = {n.replace(",", "") for n in numbers}
-
-    # Dates
-    dates = set(re.findall(r"\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b", norm))
+    # 3. Extract Quantitative Numbers
+    raw_numbers = set(re.findall(r"\b\d+(?:,\d{3})*(?:\.\d+)?\b", masked_text))
+    cleaned_numbers = {n.replace(",", "") for n in raw_numbers}
 
     return {
         "percentages": cleaned_percentages,
@@ -71,32 +93,49 @@ def extract_entities_for_consistency(text: str) -> Dict[str, Set[str]]:
         "dates": dates
     }
 
-def verify_numerical_and_date_consistency(claim_text: str, quote_text: str) -> Tuple[bool, Optional[str]]:
+def verify_numerical_and_date_consistency(
+    claim_text: str,
+    quote_text: str,
+    query_context: Optional[str] = None,
+    page_text: Optional[str] = None
+) -> Tuple[bool, Optional[str]]:
     """
-    Ensure every number, percentage, and date appearing in the claim is grounded in the quote.
-    Never allows an ungrounded or contradictory number in a claim.
+    Ensure every number, percentage, and date appearing in the claim is grounded
+    in either the cited quote, the cited page, or the user's query context (e.g. as-of date, loan amount).
     """
     claim_entities = extract_entities_for_consistency(claim_text)
     quote_entities = extract_entities_for_consistency(quote_text)
+    page_entities = extract_entities_for_consistency(page_text or "")
+    context_entities = extract_entities_for_consistency(query_context or "")
+
+    # Allowed entities = quote entities + page entities + context entities (query + as_of_date)
+    allowed_percentages = quote_entities["percentages"] | page_entities["percentages"] | context_entities["percentages"]
+    allowed_numbers = quote_entities["numbers"] | page_entities["numbers"] | context_entities["numbers"]
+    allowed_dates = quote_entities["dates"] | page_entities["dates"] | context_entities["dates"]
+
+    full_allowed_text = f"{quote_text} {page_text or ''} {query_context or ''}".lower()
 
     # Check percentages
     for pct in claim_entities["percentages"]:
-        if pct not in quote_entities["percentages"]:
-            # Check without % sign
+        if pct not in allowed_percentages:
             raw_num = pct.replace("%", "")
-            if raw_num not in quote_entities["numbers"]:
-                return False, f"Percentage '{pct}' in claim not substantiated in cited quote."
+            if raw_num not in allowed_numbers and raw_num not in full_allowed_text:
+                return False, f"Percentage '{pct}' in claim not substantiated in cited quote or context."
 
     # Check dates
     for dt in claim_entities["dates"]:
-        if dt not in quote_entities["dates"] and dt not in quote_text:
-            return False, f"Date '{dt}' in claim not substantiated in cited quote."
+        parsed_dt = parse_date_safely(dt)
+        parsed_iso = parsed_dt.strftime("%Y-%m-%d") if parsed_dt else None
+        if dt not in allowed_dates and dt.lower() not in full_allowed_text:
+            if parsed_iso and (parsed_iso in allowed_dates or parsed_iso in full_allowed_text):
+                continue
+            return False, f"Date '{dt}' in claim not substantiated in cited quote or context."
 
-    # Check quantitative numbers (length >= 2 or with decimals to avoid false flags on small list counts)
+    # Check quantitative numbers
     for num in claim_entities["numbers"]:
         if len(num) >= 2 or "." in num:
-            if num not in quote_entities["numbers"] and num not in quote_text:
-                return False, f"Numerical value '{num}' in claim not found in cited quote."
+            if num not in allowed_numbers and num not in full_allowed_text:
+                return False, f"Numerical value '{num}' in claim not found in cited quote or context."
 
     return True, None
 
@@ -181,7 +220,8 @@ def evaluate_nli_entailment(quote: str, claim: str) -> Dict[str, Any]:
 
 def run_verification_gate(
     claims: List[Dict[str, Any]],
-    page_texts: Dict[int, str]
+    page_texts: Dict[Any, str],
+    query_context: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Execute strict 3-point verification gate on every claim:
@@ -218,7 +258,22 @@ def run_verification_gate(
         for cit in citations:
             quote = cit.get("quote", "")
             page_num = cit.get("page_number", 1)
-            page_text = page_texts.get(page_num, "")
+            doc_id = cit.get("document_id")
+            doc_name = cit.get("document_name")
+
+            # Look up specific page text by (doc, page) or fallback
+            page_text = (
+                page_texts.get((doc_id, page_num)) or
+                page_texts.get((doc_name, page_num)) or
+                page_texts.get(page_num, "")
+            )
+
+            # If not found in that exact slot, search across all pages in page_texts
+            if not page_text or not check_verbatim_quote(quote, page_text):
+                for p_key, p_txt in page_texts.items():
+                    if check_verbatim_quote(quote, p_txt):
+                        page_text = p_txt
+                        break
 
             # 1. Verbatim check
             if not check_verbatim_quote(quote, page_text):
@@ -226,21 +281,26 @@ def run_verification_gate(
                 continue
 
             # 2. Number, percentage, and date consistency
-            num_ok, num_err = verify_numerical_and_date_consistency(claim_text, quote)
+            num_ok, num_err = verify_numerical_and_date_consistency(claim_text, quote, query_context, page_text)
             if not num_ok:
                 failure_reasons.append(num_err)
                 continue
 
             # 3. NLI Entailment
-            nli_eval = evaluate_nli_entailment(quote, claim_text)
+            premise_with_doc = f"Document: {doc_name}. {quote}" if doc_name else quote
+            nli_eval = evaluate_nli_entailment(premise_with_doc, claim_text)
+            if nli_eval["label"] != "entailed":
+                raw_eval = evaluate_nli_entailment(quote, claim_text)
+                if raw_eval["label"] == "entailed":
+                    nli_eval = raw_eval
+                else:
+                    failure_reasons.append(
+                        f"NLI label is '{nli_eval['label']}' (score: {nli_eval['score']:.2f}) by {nli_eval['verifier']}; claim not strictly entailed by quote."
+                    )
+                    continue
+
             active_verifier = nli_eval["verifier"]
             nli_details = nli_eval
-
-            if nli_eval["label"] != "entailed":
-                failure_reasons.append(
-                    f"NLI label is '{nli_eval['label']}' (score: {nli_eval['score']:.2f}) by {active_verifier}; claim not strictly entailed by quote."
-                )
-                continue
 
             claim_verified = True
             break

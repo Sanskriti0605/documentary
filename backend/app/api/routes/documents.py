@@ -49,19 +49,24 @@ async def upload_document(
     existing_stmt = select(Document).where(Document.file_hash == file_hash)
     existing_res = await db.execute(existing_stmt)
     existing_doc = existing_res.scalar_one_or_none()
+    if existing_doc and existing_doc.status == "PROCESSED":
+        page_check = await db.execute(select(func.count(Page.id)).where(Page.document_id == existing_doc.id))
+        if (page_check.scalar() or 0) > 0:
+            return existing_doc
     if existing_doc:
-        return existing_doc
-
-    doc = Document(
-        name=file.filename,
-        file_hash=file_hash,
-        file_path=file_path,
-        document_type=document_type,
-        domain=domain,
-        issuer=issuer,
-        status="PROCESSING"
-    )
-    db.add(doc)
+        doc = existing_doc
+        doc.status = "PROCESSING"
+    else:
+        doc = Document(
+            name=file.filename,
+            file_hash=file_hash,
+            file_path=file_path,
+            document_type=document_type,
+            domain=domain,
+            issuer=issuer,
+            status="PROCESSING"
+        )
+        db.add(doc)
     await db.flush()
 
     job = IngestionJob(

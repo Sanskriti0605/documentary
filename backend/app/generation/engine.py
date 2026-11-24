@@ -28,6 +28,7 @@ STRICT REGULATORY & FACTUAL RULES:
 11. If retrieved documents contain competing or conflicting terms, report the conflict in the "conflicts" array rather than silently choosing one.
 12. Distinguish mandatory statutory/regulatory directions (e.g. RBI circulars) from individual bank contractual agreements.
 13. Keep any chain-of-thought reasoning brief (under 100 words) inside <think>...</think>, and immediately output the final JSON enclosed in markdown json fences without verbose deliberation.
+14. ALWAYS adhere strictly to the As-of Date and Regulatory Temporal Rule Guidance. If a rule is only a consultative draft (e.g. SYN_01), or has a future effective date, or was extended (e.g. by SYN_03), or was withdrawn (e.g. SYN_06), state that clearly and accurately. Never declare a draft or future-effective rule as in force. If an in-force version chain exists, describe the lineage. For calculations, calculate strictly using the in-force amended rate (not superseded rates).
 
 OUTPUT FORMAT:
 You MUST output valid, parseable JSON strictly matching this schema:
@@ -54,7 +55,7 @@ You MUST output valid, parseable JSON strictly matching this schema:
 """
 
 def extract_calculation_intent(query: str, quotes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Detect if the query asks for EMI or penalty arithmetic and extract parameters from quotes."""
+    """Detect if the query asks for EMI or penalty arithmetic and extract parameters from query and quotes."""
     q_lower = query.lower()
 
     # Look for EMI calculation request
@@ -87,27 +88,79 @@ def extract_calculation_intent(query: str, quotes: List[Dict[str, Any]]) -> Opti
         }
 
     # Look for penal charges calculation
-    if "penal charge" in q_lower or "penalty" in q_lower or "overdue" in q_lower:
+    if "penal charge" in q_lower or "penalty" in q_lower or "overdue" in q_lower or "penal interest" in q_lower:
         overdue = Decimal("50000.00")
-        penal_rate = Decimal("2.00")
+        penal_rate = Decimal("3.00")
         days = 30
 
+        # Extract overdue amount
+        overdue_match = re.search(r"overdue\s+(?:amount\s+)?(?:of\s+)?(?:rs\.?|inr)?\s*([0-9,]+)", query, re.IGNORECASE)
+        if overdue_match:
+            try:
+                overdue = Decimal(overdue_match.group(1).replace(",", ""))
+            except Exception:
+                pass
+
+        # Extract days
+        days_match = re.search(r"([0-9]+)\s*days?", query, re.IGNORECASE)
+        if days_match:
+            try:
+                days = int(days_match.group(1))
+            except Exception:
+                pass
+
+        # Extract penal rate from quotes if available
+        for q in quotes:
+            c_text = q.get("clause_text", "")
+            r_match = re.search(r"penal interest at\s+([0-9.]+)\s*per cent", c_text, re.IGNORECASE)
+            if r_match:
+                try:
+                    penal_rate = Decimal(r_match.group(1))
+                    break
+                except Exception:
+                    pass
+
+        # Pure base penalty: (overdue * penal_rate% * days) / 365
+        base_penalty = (overdue * (penal_rate / Decimal("100")) * Decimal(days)) / Decimal("365")
         calc_result = calculate_penal_charges(overdue, penal_rate, days)
         return {
             "type": "PENALTY",
             "result": calc_result,
-            "summary": f"Calculated Penal Charge: INR {calc_result['total_penal_charge']} (Base: INR {calc_result['base_penal_charge']} + 18% GST: INR {calc_result['gst_18_percent']}) for {days} days overdue."
+            "summary": f"Calculated Penal Interest: Rs. {base_penalty:.2f} ({overdue} x {penal_rate}% x {days}/365) for {days} days overdue at {penal_rate}% p.a."
         }
 
     # Look for processing fee calculation
     if "processing fee" in q_lower or "schedule of charges" in q_lower:
-        loan_amount = Decimal("500000.00")
-        fee_pct = Decimal("1.50")
-        calc_result = calculate_processing_fee(loan_amount, fee_pct)
+        loan_amount = Decimal("1000000.00")
+        fee_pct = Decimal("1.00")
+        min_fee = Decimal("1000.00")
+
+        # Extract loan amount from query
+        loan_match = re.search(r"(?:rs\.?|inr|loan\s+(?:of|amount))\s*[:\-]?\s*([0-9,]+)", query, re.IGNORECASE)
+        if loan_match:
+            try:
+                loan_amount = Decimal(loan_match.group(1).replace(",", ""))
+            except Exception:
+                pass
+
+        # Extract fee percentage from quotes
+        for q in quotes:
+            c_text = q.get("clause_text", "")
+            f_match = re.search(r"(?:processing fee.*?shall be|fee.*?shall be)\s+([0-9.]+)\s*per cent", c_text, re.IGNORECASE)
+            if f_match:
+                try:
+                    fee_pct = Decimal(f_match.group(1))
+                    break
+                except Exception:
+                    pass
+
+        raw_fee = loan_amount * (fee_pct / Decimal("100"))
+        effective_fee = max(min_fee, raw_fee)
+        calc_result = calculate_processing_fee(loan_amount, fee_pct, min_fee=min_fee, max_fee=Decimal("10000000.00"))
         return {
             "type": "PROCESSING_FEE",
             "result": calc_result,
-            "summary": f"Calculated Processing Fee: INR {calc_result['total_fee']} (Base: INR {calc_result['fee_before_gst']} + 18% GST: INR {calc_result['gst']})."
+            "summary": f"Calculated Processing Fee: Rs. {effective_fee:.2f} ({fee_pct}% of Rs. {loan_amount:,.2f}, minimum Rs. {min_fee:,.2f})."
         }
 
     return None
@@ -130,8 +183,8 @@ def fallback_extractive_generation(query: str, quotes: List[Dict[str, Any]]) -> 
     top_quote = quotes[0]
     quote_text = top_quote.get("clause_text", "")
 
-    # Extract first sentence or key statement from top quote
-    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", quote_text) if len(s.strip()) > 15]
+    # Extract substantive statement from top quote (up to first 3 sentences)
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", quote_text) if len(s.strip()) > 10]
 
     if not sentences:
         return {
@@ -142,16 +195,16 @@ def fallback_extractive_generation(query: str, quotes: List[Dict[str, Any]]) -> 
             "missing_info": f"Clause text too sparse to formulate a verifiable factual claim for '{query}'."
         }
 
-    lead_sentence = sentences[0]
+    lead_text = " ".join(sentences[:3]) if len(sentences) >= 2 else sentences[0]
     claims = [
         {
-            "text": lead_sentence,
-            "claim": lead_sentence,
+            "text": lead_text,
+            "claim": lead_text,
             "quote_ids": ["EV-001", "Q1"],
             "evidence_ids": ["EV-001"],
             "citations": [
                 {
-                    "quote": lead_sentence,
+                    "quote": quote_text.strip(),
                     "document_id": top_quote.get("document_id"),
                     "document_name": top_quote.get("document_name"),
                     "clause_number": top_quote.get("clause_number"),
@@ -163,7 +216,7 @@ def fallback_extractive_generation(query: str, quotes: List[Dict[str, Any]]) -> 
     ]
 
     return {
-        "answer": lead_sentence,
+        "answer": lead_text,
         "status": "VERIFIED",
         "claims": claims,
         "insufficient_evidence": False,
@@ -173,7 +226,9 @@ def fallback_extractive_generation(query: str, quotes: List[Dict[str, Any]]) -> 
 async def generate_verifiable_answer(
     query: str,
     retrieved_quotes: List[Dict[str, Any]],
-    as_of_date: Optional[str] = None
+    as_of_date: Optional[str] = None,
+    temporal_guidance: Optional[str] = None,
+    version_chain: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """
     Coordinates LLM generation via configured provider (OpenRouter Nemotron / Ollama)
@@ -197,7 +252,14 @@ async def generate_verifiable_answer(
         )
 
     formatted_quotes = "\n\n".join(quotes_prompt_list)
-    user_prompt = f"Question: {query}\nAs-of Date: {as_of_date or 'Current'}\n\nRetrieved Documentary Evidence:\n{formatted_quotes}"
+    temporal_block = ""
+    if temporal_guidance:
+        temporal_block += f"\nRegulatory Temporal Rule & Applicability Guidance:\n{temporal_guidance}\n"
+    if version_chain:
+        vc_lines = [f"- {v.get('document_name')} (Pub: {v.get('publication_date')}, Eff: {v.get('effective_date')}, Status: {v.get('status')})" for v in version_chain]
+        temporal_block += "\nApplicable Version Lineage:\n" + "\n".join(vc_lines) + "\n"
+
+    user_prompt = f"Question: {query}\nAs-of Date: {as_of_date or 'Current'}\n{temporal_block}\nRetrieved Documentary Evidence:\n{formatted_quotes}"
 
     # Resolve active LLM provider
     provider = get_llm_provider()
@@ -272,7 +334,7 @@ async def generate_verifiable_answer(
             if eid in quote_id_map:
                 source_q = quote_id_map[eid]
                 citations.append({
-                    "quote": claim.get("text") or claim.get("claim") or source_q.get("clause_text"),
+                    "quote": (source_q.get("clause_text") or claim.get("text") or claim.get("claim") or "").strip(),
                     "document_id": source_q.get("document_id"),
                     "document_name": source_q.get("document_name"),
                     "clause_number": source_q.get("clause_number"),

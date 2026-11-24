@@ -38,6 +38,7 @@ async def run_document_ingestion_pipeline(document_id: str, db: AsyncSession) ->
         doc.issuer = meta["issuer"]
     doc.publication_date = meta["publication_date"]
     doc.effective_from = meta["effective_from"]
+    doc.doc_status = meta.get("doc_status", doc.doc_status or "IN_FORCE")
 
     # 3. Save Pages
     db_pages = []

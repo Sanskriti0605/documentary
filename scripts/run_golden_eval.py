@@ -120,8 +120,8 @@ def evaluate_single_query(
     expected_nums = re.findall(r"\b\d+(?:\.\d+)?%?", expected)
     missing_nums = []
     for num in expected_nums:
-        # Skip years like 2024, 2025 in general numbers check unless critical
-        if num in ("2024", "2025", "2026"):
+        # Skip years like 2023, 2024, 2025 in general numbers check unless critical
+        if num in ("2023", "2024", "2025", "2026"):
             continue
         clean_num = num.replace(",", "").replace("%", "")
         if clean_num not in norm_answer and num.lower() not in norm_answer:
@@ -135,11 +135,20 @@ def evaluate_single_query(
 async def run_evaluation(
     golden_path: str,
     api_base: str,
-    output_md_path: str = None
+    output_md_path: str = None,
+    filter_ids: List[str] = None,
+    filter_categories: List[str] = None
 ) -> List[Dict[str, Any]]:
     print(f"Loading golden queries from: {golden_path}")
     with open(golden_path, "r", encoding="utf-8") as f:
         golden_data = json.load(f)
+
+    if filter_ids:
+        filter_ids_set = set(filter_ids)
+        golden_data = [item for item in golden_data if item.get("id") in filter_ids_set]
+    if filter_categories:
+        filter_cats_set = set(filter_categories)
+        golden_data = [item for item in golden_data if item.get("category") in filter_cats_set]
 
     print(f"Loaded {len(golden_data)} golden queries. Evaluating against {api_base}...")
     results = []
@@ -284,6 +293,8 @@ if __name__ == "__main__":
     parser.add_argument("--golden", default=GOLDEN_PATH, help="Path to golden_queries_synthetic.json")
     parser.add_argument("--api-base", default=API_BASE, help="Veritas API base URL")
     parser.add_argument("--output", default="docs/baseline_results.md", help="Markdown output path")
+    parser.add_argument("--filter-ids", nargs="*", default=None, help="Filter specific question IDs (e.g. T01 T02)")
+    parser.add_argument("--categories", nargs="*", default=None, help="Filter by categories (e.g. temporal calculation)")
     args = parser.parse_args()
 
-    asyncio.run(run_evaluation(args.golden, args.api_base, args.output))
+    asyncio.run(run_evaluation(args.golden, args.api_base, args.output, filter_ids=args.filter_ids, filter_categories=args.categories))

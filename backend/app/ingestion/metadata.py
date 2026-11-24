@@ -76,22 +76,43 @@ def classify_document_type(filename: str, first_page_text: str) -> str:
         return "INTEREST_REVISION_NOTICE"
     if "account statement" in combined or "statement of account" in combined:
         return "ACCOUNT_STATEMENT"
-    if "loan policy" in combined or "credit policy" in combined:
+    if "loan policy" in combined or "credit policy" in combined or "lending policy" in combined:
         return "BANK_LOAN_POLICY"
 
     return "OTHER"
+
+def extract_doc_status(filename: str, text: str) -> str:
+    """Determine document regulatory status (DRAFT, WITHDRAWN, EXTENSION, PARTIAL_AMENDMENT, IN_FORCE)."""
+    fn_lower = filename.lower()
+    t_lower = text.lower()
+
+    if "draft" in fn_lower or "draft" in t_lower and ("for public comments" in t_lower or "draft directions" in t_lower or "not binding" in t_lower or "confidential" in t_lower):
+        return "DRAFT"
+    if "withdrawal" in fn_lower or "withdrawal of circular" in t_lower or "hereby withdrawn" in t_lower:
+        return "WITHDRAWN"
+    if "extension" in fn_lower or "extension of timeline" in t_lower:
+        return "EXTENSION"
+    if "partialamendment" in fn_lower or "partial amendment" in t_lower or "amendment to applicability" in t_lower:
+        return "PARTIAL_AMENDMENT"
+    return "IN_FORCE"
 
 def extract_metadata_from_text(filename: str, pages_text: List[str]) -> Dict[str, Any]:
     """Extract title, issuer, issue date, effective dates, domain, and doc_type."""
     first_page = pages_text[0] if pages_text else ""
     full_text_sample = "\n".join(pages_text[:3])
+    all_text = "\n".join(pages_text)
 
     doc_type = classify_document_type(filename, first_page)
+    doc_status = extract_doc_status(filename, all_text)
 
     # Detect Issuer (e.g. Reserve Bank of India, Bharat National Bank, etc.)
     issuer = "Bharat National Bank"
     if "reserve bank of india" in full_text_sample.lower() or "rbi" in full_text_sample.lower():
         issuer = "Reserve Bank of India"
+    elif "abc bank" in full_text_sample.lower():
+        issuer = "ABC Bank Ltd."
+    elif "xyz finance" in full_text_sample.lower():
+        issuer = "XYZ Finance Ltd."
     elif "state bank" in full_text_sample.lower():
         issuer = "State Bank of India"
     elif "hdfc" in full_text_sample.lower():
@@ -103,15 +124,23 @@ def extract_metadata_from_text(filename: str, pages_text: List[str]) -> Dict[str
     dates = extract_dates(full_text_sample)
     pub_date = dates[0] if dates else date.today()
 
-    # Look for effective from date (e.g., w.e.f.)
+    # Look for effective from date (e.g. come into effect from, effective from, extended to, w.e.f.)
     effective_from = pub_date
-    wef_match = re.search(r"w\.e\.f\.?\s*([0-9]{1,2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4}|[0-9]{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+,?\s+[0-9]{4})", full_text_sample, re.IGNORECASE)
-    if wef_match:
-        try:
-            cleaned = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", wef_match.group(1).strip(), flags=re.IGNORECASE)
-            effective_from = date_parser.parse(cleaned, dayfirst=True).date()
-        except Exception:
-            pass
+    eff_patterns = [
+        r"(?:come\s+into\s+effect\s+from|effective\s+(?:from|date\s+is)|w\.e\.f\.?|with\s+effect\s+from|takes?\s+effect\s+from?|extended\s+(?:from\s+[^\n]+?\s+)?to)\s*([0-9]{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+,?\s+[0-9]{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})",
+        r"w\.e\.f\.?\s*([0-9]{1,2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4}|[0-9]{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+,?\s+[0-9]{4})"
+    ]
+    for ep in eff_patterns:
+        eff_match = re.search(ep, all_text, re.IGNORECASE)
+        if eff_match:
+            try:
+                raw_match = eff_match.group(1).strip()
+                cleaned = re.sub(r"(\d+)(st|nd|rd|th)", r"\1", raw_match, flags=re.IGNORECASE)
+                parsed_d = date_parser.parse(cleaned, dayfirst=True).date()
+                effective_from = parsed_d
+                break
+            except Exception:
+                pass
 
     # Extract Title (often the first significant uppercase line or heading)
     lines = [line.strip() for line in first_page.split("\n") if len(line.strip()) > 5]
@@ -125,5 +154,6 @@ def extract_metadata_from_text(filename: str, pages_text: List[str]) -> Dict[str
         "publication_date": pub_date,
         "effective_from": effective_from,
         "effective_to": None,
+        "doc_status": doc_status,
         "version": "1.0"
     }

@@ -345,6 +345,17 @@ export interface AskResponse {
   conflict_found?: boolean;
   conflict_subject?: string | null;
   has_version_chain?: boolean;
+  as_of_date?: string | null;
+  temporal_guidance?: string | null;
+  version_chain?: Array<{
+    document_name: string;
+    document_type?: string;
+    clause_number?: string;
+    publication_date?: string;
+    effective_date?: string;
+    status: string;
+    description?: string;
+  }>;
   verified_claims: Array<{
     text: string;
     verdict?: string;

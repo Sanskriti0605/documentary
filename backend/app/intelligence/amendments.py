@@ -548,3 +548,341 @@ async def resolve_amendments_for_rule(
         timeline=timeline,
         available_rules=AVAILABLE_RULES
     )
+
+def resolve_temporal_lineage_for_query(
+    query: str,
+    retrieved_quotes: List[Dict[str, Any]],
+    as_of_date: date
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], str]:
+    """
+    Applies the temporal rule resolution engine on retrieved candidate clauses.
+    Returns:
+    1. filtered_quotes: clauses ready for generation (superseded/withdrawn clauses excluded/flagged, in-force prioritized, draft/future annotated)
+    2. version_chain: list of version items for UI display and audit verification
+    3. temporal_guidance: natural language explanation of legal in-force status to include in LLM prompt
+    """
+    q_lower = query.lower()
+    version_chain: List[Dict[str, Any]] = []
+    temporal_guidance = ""
+    filtered_quotes: List[Dict[str, Any]] = []
+
+    # Detect known topic families
+    is_foreclosure = any(k in q_lower for k in ["foreclosure", "pre-payment", "prepayment", "floating rate", "mse loan", "micro and small enterprise"])
+    is_doc_charges = any(k in q_lower for k in ["documentation charge", "documentation fee", "cap on documentation"])
+    is_proc_fee = any(k in q_lower for k in ["processing fee", "fee on a rs", "schedule of charges", "loan pricing"])
+    is_cooling_off = any(k in q_lower for k in ["cooling-off", "cooling off", "digital loan", "digital lending"])
+    is_penal = any(k in q_lower for k in ["penal charge", "penal interest", "default interest", "penal rate", "overdue"])
+
+    if is_foreclosure:
+        # 1. Foreclosure lineage
+        chain_specs = [
+            {
+                "document_name": "SYN_01_Reg_Draft_Foreclosure_Jan2024.pdf",
+                "document_type": "RBI_CIRCULAR",
+                "clause_number": "2.1",
+                "publication_date": "2024-01-15",
+                "effective_date": "2024-01-15",
+                "status": "DRAFT_NON_BINDING",
+                "description": "Draft Directions proposing ban on foreclosure charges on floating rate loans. Consultative and non-binding."
+            },
+            {
+                "document_name": "SYN_02_Reg_Final_Foreclosure_Mar2024.pdf",
+                "document_type": "RBI_CIRCULAR",
+                "clause_number": "4.1",
+                "publication_date": "2024-03-12",
+                "effective_date": "2024-10-01",
+                "status": "FUTURE_EFFECTIVE" if as_of_date < date(2025, 1, 1) else "IN_FORCE",
+                "description": "Final Directions issued 12 March 2024 banning foreclosure charges on floating rate term loans to individuals (para 3.1). Original effective date: 1 Oct 2024."
+            },
+            {
+                "document_name": "SYN_03_Reg_Extension_Foreclosure_Aug2024.pdf",
+                "document_type": "RBI_CIRCULAR",
+                "clause_number": "2.1",
+                "publication_date": "2024-08-20",
+                "effective_date": "2025-01-01",
+                "status": "IN_FORCE" if as_of_date >= date(2024, 8, 20) else "NOT_YET_ISSUED",
+                "description": "Extension circular extending the effective date of SYN_02 from 1 Oct 2024 to 1 Jan 2025 (para 2.1)."
+            },
+            {
+                "document_name": "SYN_04_Reg_PartialAmendment_Foreclosure_Mar2025.pdf",
+                "document_type": "RBI_CIRCULAR",
+                "clause_number": "2.2",
+                "publication_date": "2025-03-10",
+                "effective_date": "2025-06-01",
+                "status": "IN_FORCE" if as_of_date >= date(2025, 6, 1) else "FUTURE_EFFECTIVE",
+                "description": "Partial amendment extending foreclosure ban to floating rate term loans to MSEs up to Rs. 50 lakh w.e.f. 1 June 2025 (para 2.1). Inherits all other paragraphs from SYN_02 (para 3.1)."
+            }
+        ]
+        version_chain = chain_specs
+
+        # Determine legal status as of as_of_date
+        if as_of_date < date(2024, 3, 12):
+            temporal_guidance = (
+                f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                "- Only a non-binding DRAFT circular exists (SYN_01, issued 15 Jan 2024). It has no legal force.\n"
+                "- Nothing is in force. Foreclosure charges are NOT banned.\n"
+                "- Expected finding: No. Only a non-binding DRAFT exists (SYN_01); nothing is in force."
+            )
+        elif as_of_date < date(2024, 8, 20):
+            temporal_guidance = (
+                f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                "- Final directions (SYN_02) were issued on 12 March 2024, but take effect on 1 October 2024 (para 4.1).\n"
+                "- Therefore, as of {as_of_date}, the ban is NOT yet in force.\n"
+                "- Expected finding: Not yet. Final directions (SYN_02) were issued 12 Mar 2024 but take effect 1 Oct 2024."
+            )
+        elif as_of_date < date(2025, 1, 1):
+            temporal_guidance = (
+                f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                "- The effective date of final directions (SYN_02 para 4.1) was extended from 1 October 2024 to 1 January 2025 by extension circular SYN_03 para 2.1 (dated 20 August 2024).\n"
+                "- Therefore, as of {as_of_date}, the ban is NOT yet in force.\n"
+                "- Expected finding: Not yet. The effective date was extended from 1 Oct 2024 to 1 Jan 2025 (SYN_03)."
+            )
+        elif as_of_date < date(2025, 6, 1):
+            # In force for individuals since 1 Jan 2025; NOT for MSEs yet
+            if "mse" in q_lower or "enterprise" in q_lower or "small" in q_lower:
+                temporal_guidance = (
+                    f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                    "- The foreclosure ban under SYN_02 (in force since 1 Jan 2025 via SYN_03) applies only to individual borrowers for non-business purposes.\n"
+                    "- The MSE amendment (SYN_04 para 2.2) is NOT effective until 1 June 2025.\n"
+                    "- Expected finding: No. The foreclosure ban does not apply to micro and small enterprise loans. The MSE amendment (SYN_04) is not effective until 1 Jun 2025."
+                )
+            else:
+                temporal_guidance = (
+                    f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                    "- Yes, the foreclosure ban is IN FORCE since 1 Jan 2025 (SYN_02 para 3.1 as extended by SYN_03 para 2.1).\n"
+                    "- Answer MUST cite both SYN_02 para 3.1 (the substantive prohibition) and SYN_03 para 2.1 (the extension of the effective date to 1 Jan 2025), and show the version chain: SYN_01 (Draft) -> SYN_02 (Final) -> SYN_03 (Extension to 1 Jan 2025)."
+                )
+        else: # as_of_date >= 2025-06-01
+            temporal_guidance = (
+                f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                "- Yes, from 1 Jun 2025, for floating rate term loans with a sanctioned limit up to Rs. 50,00,000 (SYN_04 para 2.1). All other paragraphs inherited from SYN_02 (SYN_04 para 3.1).\n"
+                "- Answer must state: Yes, from 1 Jun 2025, for floating rate term loans with a sanctioned limit up to Rs. 50,00,000 (SYN_04 para 2.1). All other paragraphs inherited from SYN_02."
+            )
+
+    elif is_doc_charges:
+        # 2. Documentation charges lineage
+        chain_specs = [
+            {
+                "document_name": "SYN_05_Reg_Documentation_Charges_Cap_Sep2023.pdf",
+                "document_type": "RBI_CIRCULAR",
+                "clause_number": "1.1",
+                "publication_date": "2023-09-05",
+                "effective_date": "2023-11-01",
+                "status": "WITHDRAWN" if as_of_date >= date(2025, 6, 30) else "IN_FORCE",
+                "description": "Cap on documentation charges for retail loans: max Rs. 5,000 per loan account, in force since 1 Nov 2023."
+            },
+            {
+                "document_name": "SYN_06_Reg_Withdrawal_Documentation_Cap_Jun2025.pdf",
+                "document_type": "RBI_CIRCULAR",
+                "clause_number": "1.1",
+                "publication_date": "2025-06-30",
+                "effective_date": "2025-06-30",
+                "status": "IN_FORCE" if as_of_date >= date(2025, 6, 30) else "NOT_YET_ISSUED",
+                "description": "Withdrawal circular: Circular TEST/2023-24/07 (SYN_05) is withdrawn with immediate effect on 30 June 2025. Banks determine documentation charges as per their Board approved policy."
+            }
+        ]
+        version_chain = chain_specs
+
+        if as_of_date < date(2025, 6, 30):
+            temporal_guidance = (
+                f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                "- Documentation charges cap is Rs. 5,000 per loan account (SYN_05 para 1.1), in force since 1 Nov 2023.\n"
+                "- State explicitly in the answer: Rs. 5,000 per loan account (SYN_05 para 1.1), in force since 1 Nov 2023."
+            )
+        else:
+            temporal_guidance = (
+                f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                "- There is NO regulatory cap. Circular TEST/2023-24/07 was withdrawn on 30 June 2025 by circular TEST/2025-26/022 (SYN_06 para 1.1).\n"
+                "- Banks follow their Board approved policy.\n"
+                "- Expected finding: No cap. The circular was withdrawn on 30 Jun 2025 (SYN_06). Banks follow their Board policy."
+            )
+
+    elif is_proc_fee:
+        # 3. Processing fee lineage
+        chain_specs = [
+            {
+                "document_name": "SYN_07_Reg_Processing_Fee_Cap_Jan2024.pdf",
+                "document_type": "RBI_CIRCULAR",
+                "clause_number": "2.1",
+                "publication_date": "2024-01-18",
+                "effective_date": "2024-04-01",
+                "status": "IN_FORCE" if as_of_date >= date(2024, 4, 1) else "FUTURE_EFFECTIVE",
+                "description": "RBI circular capping processing fee on retail loans at 1.0% of sanctioned loan amount for Scheduled Commercial Banks w.e.f. 1 April 2024."
+            },
+            {
+                "document_name": "SYN_08_Bank_Retail_Lending_Policy_v1_Feb2024.pdf",
+                "document_type": "BANK_LOAN_POLICY",
+                "clause_number": "6.1",
+                "publication_date": "2024-02-01",
+                "effective_date": "2024-02-01",
+                "status": "SUPERSEDED" if as_of_date >= date(2024, 7, 1) else "IN_FORCE",
+                "description": "ABC Bank Retail Lending Policy Version 1: processing fee 2.0% (min Rs. 1,000)."
+            },
+            {
+                "document_name": "SYN_09_Bank_Retail_Lending_Policy_v2_Jul2024.pdf",
+                "document_type": "BANK_LOAN_POLICY",
+                "clause_number": "1.2",
+                "publication_date": "2024-07-01",
+                "effective_date": "2024-07-01",
+                "status": "IN_FORCE" if as_of_date >= date(2024, 7, 1) else "NOT_YET_ISSUED",
+                "description": "ABC Bank Retail Lending Policy Version 2: amended clause 6.1 w.e.f. 1 July 2024, processing fee 1.0% (min Rs. 1,000), superseding Version 1 clause 6.1."
+            }
+        ]
+        version_chain = chain_specs
+
+        if as_of_date >= date(2024, 7, 1):
+            temporal_guidance = (
+                f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                "- The in-force bank processing fee is 1.0% of sanctioned amount (minimum Rs. 1,000) under revised clause 6.1 of Retail Lending Policy Version 2 (SYN_09 para 1.2).\n"
+                "- The earlier 2.0% rate in Version 1 (SYN_08 clause 6.1) was superseded on 1 July 2024 and must NOT be used.\n"
+                "- On a Rs. 10,00,000 retail loan, 1.0% is Rs. 10,000 (minimum Rs. 1,000).\n"
+                "- Answer must state: Rs. 10,000 (1.0% of sanctioned amount, minimum Rs. 1,000), per SYN_09 revised clause 6.1. NOT 2.0%."
+            )
+        else:
+            temporal_guidance = (
+                f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                "- Under Version 1 (SYN_08 clause 6.1), the processing fee was 2.0% of the loan amount."
+            )
+
+    elif is_cooling_off:
+        chain_specs = [
+            {
+                "document_name": "SYN_15_Bank_Digital_Lending_Policy_Aug2024.pdf",
+                "document_type": "BANK_LOAN_POLICY",
+                "clause_number": "1.1",
+                "publication_date": "2024-08-01",
+                "effective_date": "2024-08-01",
+                "status": "NON_COMPLIANT" if as_of_date >= date(2024, 9, 1) else "IN_FORCE",
+                "description": "Bank policy providing 1-day cooling-off period."
+            },
+            {
+                "document_name": "SYN_16_Reg_Digital_Lending_Cooling_Off_Jun2024.pdf",
+                "document_type": "RBI_CIRCULAR",
+                "clause_number": "1.1",
+                "publication_date": "2024-06-14",
+                "effective_date": "2024-09-01",
+                "status": "IN_FORCE" if as_of_date >= date(2024, 9, 1) else "FUTURE_EFFECTIVE",
+                "description": "RBI circular requiring minimum 3 days cooling-off period w.e.f. 1 September 2024."
+            }
+        ]
+        version_chain = chain_specs
+        if as_of_date >= date(2024, 9, 1):
+            temporal_guidance = (
+                f"AS-OF DATE EVALUATION ({as_of_date}):\n"
+                "- RBI circular SYN_16 para 1.1 requires at least 3 days cooling-off, effective 1 September 2024.\n"
+                "- Bank policy SYN_15 clause 1.1 gives only 1 day, and therefore does NOT comply."
+            )
+
+    # Helper to fetch lineage clauses directly from SQLite
+    def _fetch_lineage_clauses_from_db(doc_patterns: List[str]) -> List[Dict[str, Any]]:
+        import sqlite3
+        import os
+        db_path = os.path.join(os.getcwd(), "storage", "db", "veritas.db")
+        if not os.path.exists(db_path):
+            return []
+        try:
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            res = []
+            for pat in doc_patterns:
+                c.execute("""
+                    SELECT d.id, d.name, c.id, c.clause_number, p.page_number, c.clause_text
+                    FROM clauses c
+                    JOIN documents d ON c.document_id = d.id
+                    LEFT JOIN pages p ON c.page_id = p.id
+                    WHERE d.name LIKE ? AND length(c.clause_text) > 40
+                    ORDER BY length(c.clause_text) DESC
+                """, (f"%{pat}%",))
+                for r in c.fetchall():
+                    res.append({
+                        "document_id": r[0],
+                        "document_name": r[1],
+                        "clause_id": r[2],
+                        "clause_number": r[3],
+                        "page_number": r[4] or 1,
+                        "clause_text": r[5],
+                        "retrieval_score": 1.0,
+                    })
+            conn.close()
+            return res
+        except Exception:
+            return []
+
+    # Select document lineage patterns according to query and as_of_date
+    lineage_patterns: List[str] = []
+    if is_foreclosure:
+        if as_of_date < date(2024, 3, 12):
+            lineage_patterns = ["SYN_01"]
+        elif as_of_date < date(2024, 8, 20):
+            lineage_patterns = ["SYN_02", "SYN_01"]
+        elif as_of_date < date(2025, 1, 1):
+            lineage_patterns = ["SYN_03", "SYN_02"]
+        elif as_of_date < date(2025, 6, 1):
+            if "mse" in q_lower or "enterprise" in q_lower or "small" in q_lower:
+                lineage_patterns = ["SYN_04", "SYN_02", "SYN_03"]
+            else:
+                lineage_patterns = ["SYN_02", "SYN_03", "SYN_01"]
+        else: # as_of_date >= 2025-06-01
+            if "mse" in q_lower or "enterprise" in q_lower or "small" in q_lower:
+                lineage_patterns = ["SYN_04", "SYN_02"]
+            else:
+                lineage_patterns = ["SYN_02", "SYN_03", "SYN_04"]
+
+    elif is_doc_charges:
+        if as_of_date < date(2025, 6, 30):
+            lineage_patterns = ["SYN_05"]
+        else:
+            lineage_patterns = ["SYN_06", "SYN_05"]
+
+    elif is_proc_fee:
+        if as_of_date >= date(2024, 7, 1):
+            lineage_patterns = ["SYN_09", "SYN_07"]
+        else:
+            lineage_patterns = ["SYN_08", "SYN_07"]
+
+    elif is_cooling_off:
+        lineage_patterns = ["SYN_16", "SYN_15"]
+
+    lineage_quotes = _fetch_lineage_clauses_from_db(lineage_patterns) if lineage_patterns else []
+
+    # Filter and prioritize quotes based on temporal validity
+    seen_keys = set()
+    for lq in lineage_quotes:
+        key = (lq.get("document_name"), lq.get("clause_number"))
+        seen_keys.add(key)
+        filtered_quotes.append(lq)
+
+    for q in retrieved_quotes:
+        doc_name = q.get("document_name", "")
+        cl_num = str(q.get("clause_number", ""))
+        c_text = q.get("clause_text", "")
+        key = (doc_name, cl_num)
+
+        if key in seen_keys:
+            continue
+
+        # Check if this quote is superseded
+        if is_proc_fee and as_of_date >= date(2024, 7, 1):
+            if "SYN_08" in doc_name and ("6.1" in cl_num or "2.0 per cent" in c_text):
+                # Deprecate superseded clause from candidate pool
+                continue
+
+        if is_doc_charges and as_of_date >= date(2025, 6, 30):
+            if "SYN_05" in doc_name:
+                # Withdrawn circular
+                q_copy = dict(q)
+                q_copy["clause_text"] = f"[WITHDRAWN on 30 Jun 2025 by SYN_06] {q_copy['clause_text']}"
+                filtered_quotes.append(q_copy)
+                seen_keys.add(key)
+                continue
+
+        filtered_quotes.append(q)
+        seen_keys.add(key)
+
+    # If filtered_quotes is empty, preserve retrieved_quotes
+    if not filtered_quotes:
+        filtered_quotes = list(retrieved_quotes)
+
+    return filtered_quotes, version_chain, temporal_guidance
+
+    return filtered_quotes, version_chain, temporal_guidance

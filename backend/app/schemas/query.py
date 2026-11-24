@@ -31,7 +31,8 @@ class ClaimResponse(BaseModel):
 class QueryRequest(BaseModel):
     query: str = Field(..., description="The user question to be answered with evidence")
     document_ids: Optional[List[str]] = Field(default=None, description="Optional filter of document IDs to query against")
-    as_of_date: Optional[date] = Field(default=None, description="Temporal reference date for rule applicability")
+    as_of_date: Optional[Any] = Field(default=None, description="Temporal reference date for rule applicability")
+    as_of: Optional[Any] = Field(default=None, description="Alternative alias for as_of_date")
 
 class QueryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -43,6 +44,7 @@ class QueryResponse(BaseModel):
     faithfulness_score: float
     as_of_date: Optional[date] = None
     claims: List[ClaimResponse] = []
+    version_chain: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
 
 class EvidenceDetailResponse(BaseModel):
