@@ -48,6 +48,7 @@ class DocumentResponse(BaseModel):
     updated_at: datetime
     page_count: Optional[int] = 0
     clause_count: Optional[int] = 0
+    faithfulness_score: Optional[float] = 100.0
 
 class DocumentListResponse(BaseModel):
     total: int

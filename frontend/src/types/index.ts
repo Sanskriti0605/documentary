@@ -41,6 +41,7 @@ export interface DocumentItem {
   status: IngestionStatus;
   page_count: number;
   clause_count: number;
+  faithfulness_score?: number;
   doc_status?: DocStatus;
   created_at: string;
   updated_at: string;

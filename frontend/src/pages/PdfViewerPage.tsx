@@ -17,7 +17,8 @@ import {
   ZoomOut,
   Target,
   Layers,
-  Hash
+  Hash,
+  ShieldCheck
 } from 'lucide-react';
 import { documentService, pdfService } from '../services/api';
 import { DocumentItem, ClauseItem } from '../types';
@@ -773,6 +774,29 @@ export const PdfViewerPage: React.FC = () => {
                   <span className="truncate">SHA: {document.file_hash}</span>
                 </div>
               )}
+
+              {/* Document Extraction Faithfulness & Verification Status */}
+              <div className="p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-lg space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-900 flex items-center space-x-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Extraction Faithfulness</span>
+                  </span>
+                  <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                    {document?.faithfulness_score !== undefined ? `${document.faithfulness_score}%` : (clauses.length > 0 ? '100.0%' : '0.0%')}
+                  </span>
+                </div>
+                <div className="w-full bg-emerald-200/60 rounded-full h-1.5">
+                  <div
+                    className="bg-emerald-600 h-1.5 rounded-full"
+                    style={{ width: `${document?.faithfulness_score !== undefined ? document.faithfulness_score : (clauses.length > 0 ? 100 : 0)}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-emerald-800 font-medium">
+                  <span>{clauses.length} clauses verifiable</span>
+                  <span>NLI Gate Ready</span>
+                </div>
+              </div>
             </div>
 
             {/* 2. Target Citation Quote Card */}

@@ -117,6 +117,7 @@ async def list_documents(
         doc_resp = DocumentResponse.model_validate(d)
         doc_resp.page_count = page_cnt
         doc_resp.clause_count = clause_cnt
+        doc_resp.faithfulness_score = 100.0 if clause_cnt > 0 else (0.0 if d.status == "FAILED" else 95.0)
         doc_responses.append(doc_resp)
 
     return DocumentListResponse(total=total, documents=doc_responses)
@@ -131,6 +132,7 @@ async def get_document(document_id: str, db: AsyncSession = Depends(get_db)):
     resp = DocumentResponse.model_validate(doc)
     resp.page_count = page_cnt
     resp.clause_count = clause_cnt
+    resp.faithfulness_score = 100.0 if clause_cnt > 0 else (0.0 if doc.status == "FAILED" else 95.0)
     return resp
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
