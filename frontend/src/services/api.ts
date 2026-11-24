@@ -92,7 +92,8 @@ export const pdfService = {
   getQuoteBoxes: async (
     docNameOrId: string,
     quote: string,
-    page: number = 1
+    page: number = 1,
+    bbox?: string
   ): Promise<{
     found: boolean;
     page_number: number;
@@ -109,7 +110,7 @@ export const pdfService = {
     document_name?: string;
   }> => {
     const res = await api.get(`/pdf/${encodeURIComponent(docNameOrId)}/quote-boxes`, {
-      params: { quote, page }
+      params: { quote, page, bbox }
     });
     return res.data;
   },

@@ -10,7 +10,8 @@ import {
   ShieldAlert,
   Info,
   Layers,
-  Filter
+  Filter,
+  BookOpen
 } from 'lucide-react';
 import {
   ReactFlow,
@@ -26,6 +27,7 @@ import { AmendmentResolutionResponse } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { CitationChip } from '../components/common/CitationChip';
 import { useAppStore } from '../stores/useAppStore';
+import { PdfPageViewer } from '../components/common/PdfPageViewer';
 
 export const AmendmentExplorer: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -39,6 +41,25 @@ export const AmendmentExplorer: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'graph' | 'timeline' | 'chain'>('graph');
+
+  // Embedded PDF Viewer State (Left Panel)
+  const [embeddedDoc, setEmbeddedDoc] = useState<string>('');
+  const [embeddedQuote, setEmbeddedQuote] = useState<string>('');
+  const [embeddedPage, setEmbeddedPage] = useState<number>(1);
+  const [showEmbeddedViewer, setShowEmbeddedViewer] = useState<boolean>(true);
+
+  // Sync initial embedded PDF doc and quote when resolution changes
+  useEffect(() => {
+    if (resolution?.version_in_force?.document_name) {
+      setEmbeddedDoc(resolution.version_in_force.document_name);
+      setEmbeddedQuote(resolution.version_in_force.quote || '');
+      setEmbeddedPage(1);
+    } else if (resolution?.chain?.[0]?.document_name) {
+      setEmbeddedDoc(resolution.chain[0].document_name);
+      setEmbeddedQuote(resolution.chain[0].quote || '');
+      setEmbeddedPage(1);
+    }
+  }, [resolution]);
 
   const fetchResolution = async (ruleToFetch?: string, dateToFetch?: string) => {
     const rule = ruleToFetch || selectedRule;
@@ -203,7 +224,10 @@ export const AmendmentExplorer: React.FC = () => {
     const docName = nodeData?.documentName ? String(nodeData.documentName) : '';
     const clauseText = nodeData?.clauseText ? String(nodeData.clauseText) : '';
     if (docName) {
-      navigate(`/viewer?doc=${encodeURIComponent(docName)}&page=1&quote=${encodeURIComponent(clauseText)}`);
+      setEmbeddedDoc(docName);
+      setEmbeddedQuote(clauseText);
+      setEmbeddedPage(1);
+      setShowEmbeddedViewer(true);
     }
   };
 
@@ -326,9 +350,65 @@ export const AmendmentExplorer: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content: Version In Force Card + Graph / Timeline View */}
+      {/* Main Content: Embedded PDF Evidence Viewer (Left Panel) + Version In Force & View Modes (Right Panel) */}
       {!loading && !error && resolution && (
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Embedded Left Panel: PDF Page Evidence Viewer */}
+          {showEmbeddedViewer && embeddedDoc && (
+            <div className="lg:col-span-5 space-y-3" data-testid="embedded-pdf-panel">
+              <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-2xs">
+                <div className="flex items-center space-x-2 truncate">
+                  <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span className="font-bold text-xs text-navy-950 truncate" title={embeddedDoc}>
+                    {embeddedDoc}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2 shrink-0">
+                  <button
+                    onClick={() =>
+                      navigate(
+                        `/viewer?doc=${encodeURIComponent(embeddedDoc)}&page=${embeddedPage}&quote=${encodeURIComponent(
+                          embeddedQuote
+                        )}`
+                      )
+                    }
+                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                    title="Open in full standalone viewer"
+                  >
+                    Full Viewer &rarr;
+                  </button>
+                  <button
+                    onClick={() => setShowEmbeddedViewer(false)}
+                    className="text-slate-400 hover:text-slate-700 text-xs px-1 font-bold"
+                    title="Hide embedded viewer"
+                  >
+                    &times;
+                  </button>
+                </div>
+              </div>
+
+              <PdfPageViewer
+                documentName={embeddedDoc}
+                currentPage={embeddedPage}
+                totalPages={5}
+                onPageChange={setEmbeddedPage}
+                targetQuote={embeddedQuote}
+                className="min-h-[580px] shadow-sm"
+              />
+            </div>
+          )}
+
+          {/* Right Panel: Version In Force Card + Graph / Timeline / Linear Chain View */}
+          <div className={showEmbeddedViewer && embeddedDoc ? 'lg:col-span-7 space-y-6' : 'lg:col-span-12 space-y-6'}>
+            {!showEmbeddedViewer && embeddedDoc && (
+              <button
+                onClick={() => setShowEmbeddedViewer(true)}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold shadow-2xs transition-colors"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Show PDF Evidence Viewer ({embeddedDoc})</span>
+              </button>
+            )}
           {/* Highlighted Version in Force Card */}
           {resolution.version_in_force ? (
             <div
@@ -597,6 +677,7 @@ export const AmendmentExplorer: React.FC = () => {
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
     </div>

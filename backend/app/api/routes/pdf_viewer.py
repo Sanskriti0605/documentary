@@ -72,6 +72,7 @@ async def get_quote_boxes(
     document_name: str,
     quote: str = Query(..., description="The cited quotation string"),
     page: int = Query(1, description="Target page number"),
+    bbox: Optional[str] = Query(None, description="Optional bounding box hint [x0,y0,x1,y1] for occurrence disambiguation"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -82,33 +83,23 @@ async def get_quote_boxes(
     """
     doc, file_path = await resolve_document_file_path(document_name, db)
 
+    parsed_pref_bbox: Optional[List[float]] = None
+    if bbox:
+        try:
+            parts = [float(v.strip()) for v in bbox.split(",") if v.strip()]
+            if len(parts) == 4:
+                parsed_pref_bbox = parts
+        except Exception:
+            pass
+
     try:
         pdf_doc = fitz.open(file_path)
-        result = locate_quote_with_cross_page(pdf_doc, target_page=page, quote=quote)
+        result = locate_quote_with_cross_page(pdf_doc, target_page=page, quote=quote, preferred_bbox=parsed_pref_bbox)
         pdf_doc.close()
 
         result["document_id"] = doc.id if doc else document_name
         result["document_name"] = doc.name if doc else document_name
         result["quote"] = quote
-
-        # If not found via direct text search, check if quote is stored in Clause database
-        if not result["found"] and doc:
-            clause_stmt = (
-                select(Clause, Page.page_number)
-                .join(Page, Clause.page_id == Page.id)
-                .where(Clause.document_id == doc.id)
-            )
-            c_res = await db.execute(clause_stmt)
-            for clause_obj, cl_page_num in c_res.all():
-                if clause_obj.clause_text and (quote.lower() in clause_obj.clause_text.lower() or clause_obj.clause_text.lower() in quote.lower()):
-                    if clause_obj.bounding_box and len(clause_obj.bounding_box) == 4:
-                        result["found"] = True
-                        result["page_number"] = cl_page_num
-                        result["boxes"] = [clause_obj.bounding_box]
-                        result["is_multiline"] = False
-                        result["warning"] = None
-                        result["stored_clause_id"] = clause_obj.id
-                        break
 
         return result
     except Exception as e:

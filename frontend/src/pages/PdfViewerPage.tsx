@@ -1,10 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  ChevronLeft,
-  ChevronRight,
   BookOpen,
-  Highlighter,
   Search,
   FileText,
   QrCode,
@@ -12,10 +9,6 @@ import {
   Quote,
   AlertTriangle,
   RefreshCw,
-  Loader2,
-  ZoomIn,
-  ZoomOut,
-  Target,
   Layers,
   Hash,
   ShieldCheck
@@ -24,6 +17,7 @@ import { documentService, pdfService } from '../services/api';
 import { DocumentItem, ClauseItem } from '../types';
 import { DocStatusBadge } from '../components/common/DocStatusBadge';
 import { GovernmentCertificateModal } from '../components/common/GovernmentCertificateModal';
+import { PdfPageViewer } from '../components/common/PdfPageViewer';
 
 // 6 distinct, accessible color themes for different clauses
 export const CLAUSE_THEMES = [
@@ -150,24 +144,18 @@ export const PdfViewerPage: React.FC = () => {
   const [clauses, setClauses] = useState<ClauseItem[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(targetPage);
   const [allDocs, setAllDocs] = useState<DocumentItem[]>([]);
-  const [pageDimensions, setPageDimensions] = useState<{ [pageNum: number]: { width: number; height: number } }>({});
 
   // Quote & Highlight State
   const [quoteHighlight, setQuoteHighlight] = useState<QuoteHighlightState | null>(null);
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null);
   const [clauseSearch, setClauseSearch] = useState<string>('');
-  const [highlightAll, setHighlightAll] = useState<boolean>(true);
-  const [zoomLevel, setZoomLevel] = useState<number>(100); // 100% zoom default
   const [certificateClause, setCertificateClause] = useState<ClauseItem | null>(null);
 
   // UI / Status State
   const [loading, setLoading] = useState<boolean>(true);
-  const [imageLoading, setImageLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // DOM Refs for auto-scroll and zoom
-  const viewerContainerRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
+  // DOM Refs
   const sidebarListRef = useRef<HTMLDivElement>(null);
 
   // 1. Initial Load of Documents Library
@@ -192,18 +180,6 @@ export const PdfViewerPage: React.FC = () => {
           // Load Clauses
           const cls = await documentService.getClauses(found.id);
           setClauses(cls);
-
-          // Load PDF dimensions
-          try {
-            const info = await pdfService.getPdfInfo(found.id || found.name);
-            const dimsMap: { [pageNum: number]: { width: number; height: number } } = {};
-            info.pages.forEach((p) => {
-              dimsMap[p.page_number] = { width: p.width, height: p.height };
-            });
-            setPageDimensions(dimsMap);
-          } catch (e) {
-            console.error('Failed to load page dimensions:', e);
-          }
         } else {
           setError(`Document "${docNameOrId}" not found in current library.`);
         }
@@ -286,33 +262,6 @@ export const PdfViewerPage: React.FC = () => {
     fetchQuoteBoxes();
   }, [document?.name, docNameOrId, targetQuote, currentPage, bboxParam]);
 
-  // 3. Auto-scroll / Zoom to Highlight when highlight boxes load
-  useEffect(() => {
-    if (quoteHighlight?.found && quoteHighlight.boxes.length > 0) {
-      const timer = setTimeout(() => {
-        const container = viewerContainerRef.current;
-        const firstBox = quoteHighlight.boxes[0];
-        if (container && firstBox) {
-          const currentDim = pageDimensions[currentPage] || { width: 612, height: 792 };
-          const imgElem = imageRef.current;
-          const displayHeight = imgElem ? imgElem.clientHeight : 792;
-          const scale = displayHeight / currentDim.height;
-
-          // Target vertical center of bounding box
-          const boxCenterY = ((firstBox[1] + firstBox[3]) / 2) * scale;
-          const targetScrollTop = Math.max(0, boxCenterY - container.clientHeight / 2 + 60);
-
-          container.scrollTo({
-            top: targetScrollTop,
-            behavior: 'smooth',
-          });
-        }
-      }, 300);
-
-      return () => clearTimeout(timer);
-    }
-  }, [quoteHighlight, currentPage, pageDimensions]);
-
   // Document Switching
   const handleDocChange = (docIdentifier: string) => {
     setSearchParams({ doc: docIdentifier, page: '1' });
@@ -350,46 +299,7 @@ export const PdfViewerPage: React.FC = () => {
     setSearchParams(params);
   };
 
-  // Zoom Helpers
-  const handleZoomIn = () => setZoomLevel((z) => Math.min(200, z + 20));
-  const handleZoomOut = () => setZoomLevel((z) => Math.max(60, z - 20));
-  const handleResetZoom = () => setZoomLevel(100);
-  const handleFocusHighlight = () => {
-    setZoomLevel(130);
-    if (quoteHighlight?.found && quoteHighlight.boxes.length > 0) {
-      const container = viewerContainerRef.current;
-      const firstBox = quoteHighlight.boxes[0];
-      if (container && firstBox) {
-        const currentDim = pageDimensions[currentPage] || { width: 612, height: 792 };
-        const scale = (792 * 1.3) / currentDim.height;
-        const boxCenterY = ((firstBox[1] + firstBox[3]) / 2) * scale;
-        container.scrollTo({ top: Math.max(0, boxCenterY - 140), behavior: 'smooth' });
-      }
-    }
-  };
-
   const currentDocName = document?.name || docNameOrId;
-  const currentDims = pageDimensions[currentPage] || { width: 612, height: 792 };
-
-  // Image source URL
-  const imageSrc = currentDocName
-    ? `/api/v1/pdf/${encodeURIComponent(currentDocName)}/page/${currentPage}?highlight_all=${highlightAll}${
-        quoteHighlight?.boxes?.length
-          ? `&bboxes=${quoteHighlight.boxes.map((b) => b.join(',')).join(';')}`
-          : targetQuote
-          ? `&quote=${encodeURIComponent(targetQuote)}`
-          : bboxParam
-          ? `&bbox=${encodeURIComponent(bboxParam)}`
-          : ''
-      }`
-    : '';
-
-  // Active page clauses for multi-color section bounding boxes
-  const activePageClauses = useMemo(() => {
-    return clauses.filter(
-      (c) => (c.page_number || 1) === currentPage && c.bounding_box && c.bounding_box.length === 4
-    );
-  }, [clauses, currentPage]);
 
   // Filtered citations for sidebar search
   const filteredClauses = useMemo(() => {
@@ -402,9 +312,6 @@ export const PdfViewerPage: React.FC = () => {
         (c.clause_text && c.clause_text.toLowerCase().includes(q))
     );
   }, [clauses, clauseSearch]);
-
-  const hasMissingBboxWarning =
-    Boolean(targetQuote) && (!quoteHighlight || !quoteHighlight.found || quoteHighlight.boxes.length === 0);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto" data-testid="pdf-viewer-page">
@@ -460,48 +367,6 @@ export const PdfViewerPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Missing BBox Warning Banner */}
-      {hasMissingBboxWarning && (
-        <div
-          data-testid="missing-bbox-warning"
-          className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl space-y-2 shadow-xs"
-        >
-          <div className="flex items-center space-x-2 text-xs font-bold text-amber-900 uppercase tracking-wider">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>Bounding Box Unavailable on Current Page</span>
-          </div>
-          <p className="text-xs text-amber-900 font-medium leading-relaxed">
-            Exact spatial bounding box coordinates could not be isolated for this quote on Page {currentPage}.
-            The verified quotation text is displayed below and confirmed in the document text stream.
-          </p>
-          <div className="p-3 bg-white/90 border border-amber-200 rounded-lg font-serif italic text-xs text-amber-950">
-            "{targetQuote}"
-          </div>
-        </div>
-      )}
-
-      {/* Cross-Page Continuation Banner */}
-      {quoteHighlight?.cross_page?.is_cross_page && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between shadow-xs">
-          <div className="flex items-center space-x-2 text-xs text-blue-900 font-semibold">
-            <Layers className="w-4 h-4 text-blue-600" />
-            <span>
-              {quoteHighlight.cross_page.continues_on_page
-                ? `Quote spans across page break: continues on Page ${quoteHighlight.cross_page.continues_on_page}`
-                : `Quote continued from Page ${quoteHighlight.cross_page.continued_from_page}`}
-            </span>
-          </div>
-          {quoteHighlight.cross_page.continues_on_page && (
-            <button
-              onClick={() => navigateToPage(quoteHighlight.cross_page!.continues_on_page!)}
-              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-2xs transition-colors"
-            >
-              Go to Page {quoteHighlight.cross_page.continues_on_page} &rarr;
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Error State */}
       {error && (
         <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 text-rose-900 space-y-3 shadow-xs">
@@ -532,212 +397,20 @@ export const PdfViewerPage: React.FC = () => {
       ) : (
         /* Main Layout: 2/3 PDF Viewer Surface + 1/3 Metadata & Citations Sidebar */
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Viewer Card */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col min-h-[640px]">
-            {/* Viewer Navigation & Zoom Toolbar */}
-            <div className="p-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-50/70">
-              {/* Page Controls */}
-              <div className="flex items-center space-x-2">
-                <button
-                  data-testid="prev-page-button"
-                  disabled={currentPage <= 1}
-                  onClick={() => navigateToPage(currentPage - 1)}
-                  className="p-1 rounded hover:bg-slate-200 disabled:opacity-40 transition-colors"
-                  title="Previous Page"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-
-                <div className="flex items-center space-x-1 font-semibold text-slate-700">
-                  <span>Page</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={document?.page_count || 1}
-                    value={currentPage}
-                    onChange={(e) => navigateToPage(parseInt(e.target.value, 10) || 1)}
-                    className="w-12 text-center py-0.5 border border-slate-300 rounded font-semibold text-xs"
-                  />
-                  <span>of {document?.page_count || 1}</span>
-                </div>
-
-                <button
-                  data-testid="next-page-button"
-                  disabled={currentPage >= (document?.page_count || 1)}
-                  onClick={() => navigateToPage(currentPage + 1)}
-                  className="p-1 rounded hover:bg-slate-200 disabled:opacity-40 transition-colors"
-                  title="Next Page"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Zoom & Highlight Focus Controls */}
-              <div className="flex items-center space-x-2">
-                <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
-                  <button
-                    onClick={handleZoomOut}
-                    className="p-1 hover:bg-slate-100 rounded text-slate-600"
-                    title="Zoom Out"
-                  >
-                    <ZoomOut className="w-3.5 h-3.5" />
-                  </button>
-                  <span className="px-2 text-[11px] font-bold text-slate-700 min-w-[42px] text-center">
-                    {zoomLevel}%
-                  </span>
-                  <button
-                    onClick={handleZoomIn}
-                    className="p-1 hover:bg-slate-100 rounded text-slate-600"
-                    title="Zoom In"
-                  >
-                    <ZoomIn className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={handleResetZoom}
-                    className="px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded"
-                    title="Reset Zoom"
-                  >
-                    100%
-                  </button>
-                </div>
-
-                {/* Focus / Auto-Scroll to Highlight Button */}
-                {quoteHighlight?.found && quoteHighlight.boxes.length > 0 && (
-                  <button
-                    onClick={handleFocusHighlight}
-                    className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold shadow-2xs transition-colors"
-                    title="Auto-scroll & Zoom directly to cited quote"
-                  >
-                    <Target className="w-3.5 h-3.5 text-amber-700" />
-                    <span>Focus Highlight</span>
-                  </button>
-                )}
-
-                {/* Highlight All Toggle */}
-                <button
-                  onClick={() => setHighlightAll(!highlightAll)}
-                  className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors border ${
-                    highlightAll
-                      ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                  }`}
-                  title="Toggle clause section boundaries"
-                >
-                  <Highlighter className="w-3 h-3" />
-                  <span>{highlightAll ? 'All Clauses' : 'Active Only'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Document Render Surface with Auto-Scroll & Highlighting */}
-            <div
-              ref={viewerContainerRef}
-              data-testid="pdf-viewport-container"
-              className="flex-1 p-6 flex flex-col items-center justify-start bg-slate-100/70 overflow-auto relative max-h-[720px] custom-scrollbar"
-            >
-              {imageLoading && (
-                <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-20">
-                  <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-                </div>
-              )}
-
-              <div
-                style={{
-                  width: `${zoomLevel}%`,
-                  maxWidth: zoomLevel <= 100 ? '600px' : 'none',
-                  transition: 'width 0.2s ease-in-out',
-                }}
-                className="bg-white shadow-xl border border-slate-300 rounded overflow-hidden relative select-none"
-              >
-                <img
-                  ref={imageRef}
-                  src={imageSrc}
-                  alt={`Page ${currentPage} of ${currentDocName}`}
-                  onLoadStart={() => setImageLoading(true)}
-                  onLoad={() => setImageLoading(false)}
-                  className="w-full h-auto object-contain block pointer-events-none"
-                  onError={(e) => {
-                    setImageLoading(false);
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                />
-
-                {/* Multi-Line Target Quote Highlight Overlay Rectangles */}
-                {quoteHighlight?.found &&
-                  quoteHighlight.boxes.map((box, idx) => {
-                    const leftPct = (box[0] / currentDims.width) * 100;
-                    const topPct = (box[1] / currentDims.height) * 100;
-                    const widthPct = ((box[2] - box[0]) / currentDims.width) * 100;
-                    const heightPct = ((box[3] - box[1]) / currentDims.height) * 100;
-
-                    return (
-                      <div
-                        key={`quote-box-${idx}`}
-                        data-testid="quote-highlight-rect"
-                        style={{
-                          left: `${leftPct}%`,
-                          top: `${topPct}%`,
-                          width: `${widthPct}%`,
-                          height: `${heightPct}%`,
-                        }}
-                        className="absolute bg-amber-400/50 border-2 border-amber-600 rounded z-30 shadow-md ring-2 ring-amber-400/80 animate-pulse pointer-events-auto"
-                        title={`Cited Quote (Line ${idx + 1}): [${box.map(Math.round).join(', ')}]`}
-                      >
-                        {idx === 0 && (
-                          <div className="absolute -top-3.5 left-1 z-40 pointer-events-none">
-                            <span className="bg-amber-600 text-white font-bold text-[9px] px-1.5 py-0.2 rounded shadow-2xs uppercase">
-                              Target Citation
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                {/* Multi-Colored Section BBoxes for all extracted clauses */}
-                {highlightAll &&
-                  activePageClauses.map((c, idx) => {
-                    const b = c.bounding_box!;
-                    const isSelected = selectedClauseId === c.id;
-                    const theme = CLAUSE_THEMES[idx % CLAUSE_THEMES.length];
-
-                    const leftPct = (b[0] / currentDims.width) * 100;
-                    const topPct = (b[1] / currentDims.height) * 100;
-                    const widthPct = ((b[2] - b[0]) / currentDims.width) * 100;
-                    const heightPct = ((b[3] - b[1]) / currentDims.height) * 100;
-
-                    return (
-                      <div
-                        key={`clause-${c.id}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCitationClick(c);
-                        }}
-                        style={{
-                          left: `${leftPct}%`,
-                          top: `${topPct}%`,
-                          width: `${widthPct}%`,
-                          height: `${heightPct}%`,
-                        }}
-                        title={`Clause ${c.clause_number || ''}: ${c.section_title || ''} (Click to inspect)`}
-                        className={`absolute cursor-pointer transition-all border-2 rounded ${
-                          isSelected
-                            ? `${theme.borderActive} ${theme.bgActive} ${theme.ring} z-20 shadow-md ring-2`
-                            : `${theme.border} ${theme.bg} hover:border-blue-600 hover:bg-blue-300/40 z-10 opacity-70 hover:opacity-100`
-                        }`}
-                      >
-                        <div className="absolute -top-3.5 left-1 z-25 pointer-events-none">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded shadow-2xs ${
-                            isSelected ? theme.activeBadge : theme.badge
-                          }`}>
-                            {c.clause_number || `C${idx + 1}`}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
+          {/* Main Viewer Card powered by PdfPageViewer */}
+          <div className="lg:col-span-2">
+            <PdfPageViewer
+              documentName={currentDocName}
+              currentPage={currentPage}
+              totalPages={document?.page_count || 1}
+              onPageChange={navigateToPage}
+              targetQuote={targetQuote}
+              targetBbox={bboxParam}
+              clauses={clauses}
+              selectedClauseId={selectedClauseId}
+              onClauseSelect={handleCitationClick}
+              className="h-full min-h-[640px]"
+            />
           </div>
 
           {/* Sidebar: Metadata, Status Banner, Target Quote, & Other Citations */}
