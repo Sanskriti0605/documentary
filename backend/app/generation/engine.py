@@ -226,6 +226,8 @@ def fallback_extractive_generation(query: str, quotes: List[Dict[str, Any]]) -> 
         {
             "text": lead_text,
             "claim": lead_text,
+            "origin": "extractive",
+            "grounding": "by_construction",
             "quote_ids": ["EV-001", "Q1"],
             "evidence_ids": ["EV-001"],
             "citations": [

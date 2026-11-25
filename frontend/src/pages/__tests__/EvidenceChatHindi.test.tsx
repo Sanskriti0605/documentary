@@ -109,7 +109,7 @@ describe('EvidenceChat Multilingual (Hindi) Support', () => {
 
     // Check Hindi UI elements
     expect(screen.getByText(/उत्तर सारांश/i)).toBeInTheDocument();
-    expect(screen.getByText(/सटीकता/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/साक्ष्य आधार/i)[0]).toBeInTheDocument();
     expect(screen.getByTestId('claim-verdict-verified')).toHaveTextContent(/सत्यापित/i);
 
     // Toggle English Original

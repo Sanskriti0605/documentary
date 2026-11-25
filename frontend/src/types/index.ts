@@ -343,7 +343,7 @@ export interface AskResponse {
   query: string;
   answer: string;
   status: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'CONFLICTED' | 'INSUFFICIENT_EVIDENCE';
-  faithfulness_score: number;
+  faithfulness_score?: number | null;
   generated_count: number;
   verified_count: number;
   blocked_count: number;
@@ -362,6 +362,67 @@ export interface AskResponse {
   translator?: string | null;
   english_answer?: string | null;
   english_query?: string | null;
+  score_details?: {
+    status: string;
+    is_abstained: boolean;
+    generation_mode: 'llm' | 'extractive';
+    mode_label: string;
+    grounding: 'verified_nli' | 'by_construction' | 'none';
+    claims_generated: number;
+    claims_verified: number;
+    claims_blocked: number;
+    generation_pass_rate: number | null;
+    evidence_strength: {
+      mean: number | null;
+      min: number | null;
+      verifier: string;
+      label: string;
+    } | null;
+    coverage: {
+      score: number;
+      elements_present: string[];
+      elements_required: string[];
+      missing_elements: string[];
+    };
+    relevance: {
+      score: number;
+      is_low_relevance: boolean;
+      warning: string | null;
+      top_clause_score: number;
+      subject_match: boolean;
+    };
+    confidence_band: 'HIGH' | 'MEDIUM' | 'LOW' | 'INSUFFICIENT';
+    confidence_reason: string;
+    faithfulness_score: number | null;
+  };
+  claims_generated?: number;
+  claims_verified?: number;
+  claims_blocked?: number;
+  generation_pass_rate?: number | null;
+  evidence_strength?: {
+    mean: number | null;
+    min: number | null;
+    verifier: string;
+    label: string;
+  } | null;
+  coverage?: {
+    score: number;
+    elements_present: string[];
+    elements_required: string[];
+    missing_elements: string[];
+  };
+  relevance?: {
+    score: number;
+    is_low_relevance: boolean;
+    warning: string | null;
+    top_clause_score: number;
+    subject_match: boolean;
+  };
+  confidence_band?: 'HIGH' | 'MEDIUM' | 'LOW' | 'INSUFFICIENT';
+  confidence_reason?: string;
+  grounding?: string;
+  generation_mode?: 'llm' | 'extractive';
+  mode_label?: string;
   version_chain?: Array<{
     document_name: string;
     document_type?: string;

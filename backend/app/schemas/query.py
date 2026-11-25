@@ -42,7 +42,7 @@ class QueryResponse(BaseModel):
     query: str
     answer: str
     status: str
-    faithfulness_score: float
+    faithfulness_score: Optional[float] = None
     as_of_date: Optional[date] = None
     claims: List[ClaimResponse] = []
     version_chain: Optional[List[Dict[str, Any]]] = None
@@ -54,6 +54,20 @@ class QueryResponse(BaseModel):
     translator: Optional[str] = "none"
     english_answer: Optional[str] = None
     english_query: Optional[str] = None
+
+    # Comprehensive multi-signal evidence grounding
+    score_details: Optional[Dict[str, Any]] = None
+    claims_generated: Optional[int] = None
+    claims_verified: Optional[int] = None
+    claims_blocked: Optional[int] = None
+    generation_pass_rate: Optional[float] = None
+    evidence_strength: Optional[Dict[str, Any]] = None
+    coverage: Optional[Dict[str, Any]] = None
+    relevance: Optional[Dict[str, Any]] = None
+    confidence_band: Optional[str] = None
+    confidence_reason: Optional[str] = None
+    grounding: Optional[str] = None
+    mode_label: Optional[str] = None
 
 class EvidenceDetailResponse(BaseModel):
     session_id: str

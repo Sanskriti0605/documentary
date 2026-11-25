@@ -302,31 +302,49 @@ def run_verification_gate(
                 continue
 
             # 3. NLI Entailment
-            premise_with_doc = f"Document: {doc_name}. {quote}" if doc_name else quote
-            nli_eval = evaluate_nli_entailment(premise_with_doc, claim_text)
-            if nli_eval["label"] != "entailed":
-                raw_eval = evaluate_nli_entailment(quote, claim_text)
-                if raw_eval["label"] == "entailed":
-                    nli_eval = raw_eval
-                else:
-                    failure_reasons.append(
-                        f"NLI label is '{nli_eval['label']}' (score: {nli_eval['score']:.2f}) by {nli_eval['verifier']}; claim not strictly entailed by quote."
-                    )
-                    continue
+            is_extractive_claim = claim.get("origin") == "extractive" or (
+                len(citations) > 0 and claim_text.strip() == citations[0].get("quote", "").strip()
+            )
 
-            active_verifier = nli_eval["verifier"]
-            nli_details = nli_eval
+            if is_extractive_claim:
+                active_verifier = "extractive-verbatim"
+                nli_details = {
+                    "score": None,
+                    "label": "by_construction",
+                    "verifier": "extractive-verbatim"
+                }
+            else:
+                premise_with_doc = f"Document: {doc_name}. {quote}" if doc_name else quote
+                nli_eval = evaluate_nli_entailment(premise_with_doc, claim_text)
+                if nli_eval["label"] != "entailed":
+                    raw_eval = evaluate_nli_entailment(quote, claim_text)
+                    if raw_eval["label"] == "entailed":
+                        nli_eval = raw_eval
+                    else:
+                        failure_reasons.append(
+                            f"NLI label is '{nli_eval['label']}' (score: {nli_eval['score']:.2f}) by {nli_eval['verifier']}; claim not strictly entailed by quote."
+                        )
+                        continue
+
+                active_verifier = nli_eval["verifier"]
+                nli_details = nli_eval
 
             claim_verified = True
             break
+
+        is_extractive = claim.get("origin") == "extractive" or (
+            len(citations) > 0 and claim_text.strip() == citations[0].get("quote", "").strip()
+        )
 
         if claim_verified:
             verified_claims.append({
                 "text": claim_text,
                 "verdict": "VERIFIED",
                 "status": "VERIFIED",
+                "origin": "extractive" if is_extractive else "llm",
+                "grounding": "by_construction" if is_extractive else "verified_nli",
                 "verifier": active_verifier,
-                "nli_score": nli_details.get("score", 1.0),
+                "nli_score": nli_details.get("score"),
                 "nli_label": nli_details.get("label", "entailed"),
                 "citations": citations
             })
@@ -339,17 +357,29 @@ def run_verification_gate(
                 "searched_for": claim_text,
                 "missing": missing_desc,
                 "verifier": active_verifier,
+                "origin": "extractive" if is_extractive else "llm",
                 "failure_reasons": failure_reasons,
                 "message": f"BLOCKED: Lacks verified evidence. " + missing_desc
             })
 
     num_verified = len(verified_claims)
-    faithfulness_score = round((num_verified / total_claims * 100), 2) if total_claims > 0 else 0.0
+    has_extractive = any(c.get("origin") == "extractive" for c in verified_claims + blocked_claims)
+
+    if total_claims == 0:
+        generation_pass_rate = None
+        faithfulness_score = None
+    elif has_extractive and all(c.get("origin") == "extractive" for c in verified_claims + blocked_claims):
+        generation_pass_rate = None
+        faithfulness_score = None
+    else:
+        generation_pass_rate = round(num_verified / total_claims, 4)
+        faithfulness_score = round(num_verified / total_claims * 100, 2)
 
     return {
         "total_claims": total_claims,
         "verified_count": num_verified,
         "blocked_count": len(blocked_claims),
+        "generation_pass_rate": generation_pass_rate,
         "faithfulness_score": faithfulness_score,
         "verified_claims": verified_claims,
         "blocked_claims": blocked_claims,

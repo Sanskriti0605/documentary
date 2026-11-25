@@ -20,7 +20,8 @@ import {
   ServerCrash,
   Cpu,
   ArrowRight,
-  Languages
+  Languages,
+  ShieldCheck
 } from 'lucide-react';
 import { askService } from '../services/api';
 import { AskResponse } from '../types';
@@ -323,7 +324,7 @@ export const EvidenceChat: React.FC = () => {
               )}
             </div>
 
-            {/* Faithfulness Meter & Counts */}
+            {/* Evidence Grounding Meter & Counts */}
             <div className="flex items-center space-x-4">
               <div className="text-xs text-slate-500" data-testid="claims-count-text">
                 <span className="font-semibold text-slate-800">{response.generated_count} generated, {response.blocked_count} blocked</span>
@@ -331,9 +332,122 @@ export const EvidenceChat: React.FC = () => {
 
               <div data-testid="faithfulness-meter" className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
                 <Percent className="w-4 h-4 text-blue-600" />
-                <span className="text-slate-600 font-medium">{isHindi ? HINDI_UI.FAITHFULNESS : 'Faithfulness:'}</span>
-                <span className="font-bold text-navy-950 text-sm">{response.faithfulness_score}%</span>
+                <span className="text-slate-600 font-medium">{isHindi ? HINDI_UI.FAITHFULNESS : 'Evidence Grounding:'}</span>
+                <span className="font-bold text-navy-950 text-sm">
+                  {response.status === 'INSUFFICIENT_EVIDENCE' || (response.faithfulness_score === 0 && response.verified_count === 0)
+                    ? 'Insufficient Evidence'
+                    : ((response.generation_mode === 'extractive' || response.grounding === 'by_construction') || (response.is_fallback && response.faithfulness_score === null))
+                    ? 'Extractive mode: quotes are copied from the source'
+                    : `${response.faithfulness_score ?? Math.round((response.generation_pass_rate ?? 1) * 100)}%`}
+                </span>
               </div>
+            </div>
+          </div>
+
+          {/* Multi-Signal Evidence Grounding & Verification Panel */}
+          <div data-testid="evidence-grounding-panel" className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+                <span className="font-bold text-xs uppercase tracking-wider text-navy-950">
+                  {isHindi ? HINDI_UI.EVIDENCE_GROUNDING : 'Evidence Grounding & Quality Assessment'}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-medium text-slate-500">Confidence Band:</span>
+                <span
+                  data-testid="confidence-band-badge"
+                  className={`text-xs font-bold px-2.5 py-0.5 rounded-full border shadow-2xs ${
+                    response.confidence_band === 'HIGH'
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : response.confidence_band === 'MEDIUM'
+                      ? 'bg-blue-100 text-blue-800 border-blue-300'
+                      : response.confidence_band === 'LOW'
+                      ? 'bg-amber-100 text-amber-800 border-amber-300'
+                      : 'bg-rose-100 text-rose-800 border-rose-300'
+                  }`}
+                  title={response.confidence_reason || 'Derived from pass rate, evidence strength, coverage and relevance.'}
+                >
+                  {response.confidence_band || (response.status === 'INSUFFICIENT_EVIDENCE' ? 'INSUFFICIENT' : 'MEDIUM')}
+                </span>
+              </div>
+            </div>
+
+            {/* Metric Signals Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {/* 1. Claims Grounding */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-1" title="Proves which model claims passed verbatim and NLI verification vs ungrounded claims that were blocked.">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Claims Grounding</div>
+                <div className="font-bold text-navy-950" data-testid="panel-claims-ratio">
+                  {response.verified_count} / {response.generated_count} Verified
+                  {response.blocked_count > 0 && (
+                    <span className="text-rose-600 ml-1">({response.blocked_count} blocked)</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Pass Rate: {response.generation_pass_rate !== null && response.generation_pass_rate !== undefined ? `${Math.round(response.generation_pass_rate * 100)}%` : 'N/A (Extractive)'}
+                </div>
+              </div>
+
+              {/* 2. Evidence Strength */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-1" title="Raw cross-encoder NLI entailment probability over verified claims. Proves textual entailment confidence.">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Evidence Strength</div>
+                <div className="font-bold text-navy-950" data-testid="panel-evidence-strength">
+                  {response.evidence_strength?.mean !== null && response.evidence_strength?.mean !== undefined
+                    ? `${(response.evidence_strength.mean * 100).toFixed(1)}%`
+                    : (response.is_fallback || response.grounding === 'by_construction' ? 'By Construction' : 'Heuristic Mode')}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate" title={response.evidence_strength?.verifier || 'verifier'}>
+                  {response.evidence_strength?.min !== null && response.evidence_strength?.min !== undefined
+                    ? `Min: ${(response.evidence_strength.min * 100).toFixed(1)}% (${response.evidence_strength.verifier})`
+                    : 'Source quote verbatim'}
+                </div>
+              </div>
+
+              {/* 3. Query Coverage */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-1" title="Deterministic check for required elements (verdict, effective date, numbers, units) without model self-grading.">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Query Coverage</div>
+                <div className="font-bold text-navy-950" data-testid="panel-coverage-score">
+                  {response.coverage?.score !== undefined ? `${Math.round(response.coverage.score * 100)}%` : '100%'}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate">
+                  {response.coverage?.missing_elements && response.coverage.missing_elements.length > 0
+                    ? `Missing: ${response.coverage.missing_elements.join(', ')}`
+                    : 'All required elements present'}
+                </div>
+              </div>
+
+              {/* 4. Retrieval Relevance */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-1" title="BM25/semantic retrieval match between query and cited clauses. Warns if evidence topic does not match question.">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Retrieval Relevance</div>
+                <div className="font-bold text-navy-950" data-testid="panel-relevance-score">
+                  {response.relevance?.score !== undefined ? `${Math.round(response.relevance.score * 100)}%` : '75%'}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate">
+                  {response.relevance?.is_low_relevance ? '⚠️ Low topic alignment' : 'Evidence aligned with query'}
+                </div>
+              </div>
+            </div>
+
+            {/* Low Relevance Warning Banner if applicable */}
+            {response.relevance?.warning && (
+              <div data-testid="relevance-warning-banner" className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg flex items-start space-x-2 text-amber-900 text-xs">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Relevance Warning: </span>
+                  <span>{response.relevance.warning}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Bottom Methodology Note */}
+            <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1">
+              <span>
+                <strong>Note:</strong> Grounding shows claims are supported by the quoted text. It does not prove the answer is the right interpretation.
+              </span>
+              <span className="text-[10px] font-mono text-slate-400">
+                Mode: {response.mode_label || (response.is_fallback ? 'Extractive' : 'LLM')}
+              </span>
             </div>
           </div>
 

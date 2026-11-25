@@ -1,7 +1,8 @@
 export const HINDI_UI = {
   VERIFIED: 'सत्यापित (VERIFIED)',
   BLOCKED: 'अवरुद्ध (BLOCKED)',
-  FAITHFULNESS: 'सटीकता (Faithfulness)',
+  FAITHFULNESS: 'साक्ष्य आधार (Evidence Grounding)',
+  EVIDENCE_GROUNDING: 'साक्ष्य आधार (Evidence Grounding)',
   RESPONSE_SUMMARY: 'उत्तर सारांश (Response Summary)',
   INSUFFICIENT_EVIDENCE: 'अपर्याप्त साक्ष्य (Insufficient Evidence)',
   ABSTENTION_MESSAGE: 'इस प्रश्न का उत्तर देने के लिए पर्याप्त दस्तावेजी साक्ष्य उपलब्ध नहीं हैं। (Insufficient documentary evidence to answer this question.)',

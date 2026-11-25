@@ -203,7 +203,7 @@ export const DocumentLibrary: React.FC = () => {
                 <th className="px-6 py-3.5">Ingestion</th>
                 <th className="px-6 py-3.5">Pages</th>
                 <th className="px-6 py-3.5">Clauses</th>
-                <th className="px-6 py-3.5">Faithfulness</th>
+                <th className="px-6 py-3.5">Extraction Fidelity</th>
                 <th className="px-6 py-3.5">Upload Date</th>
                 <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
@@ -250,12 +250,14 @@ export const DocumentLibrary: React.FC = () => {
                     <td className="px-6 py-4 text-slate-600 font-medium">{doc.clause_count}</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center space-x-1 text-xs font-bold px-2 py-0.5 rounded-full ${
-                        (doc.clause_count || 0) > 0
+                        (doc.faithfulness_score ?? 0) >= 70
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : (doc.faithfulness_score ?? 0) > 0
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
                           : 'bg-slate-100 text-slate-500 border border-slate-200'
                       }`}>
                         <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>{doc.faithfulness_score !== undefined ? `${doc.faithfulness_score}%` : (doc.clause_count > 0 ? '100%' : '0%')}</span>
+                        <span>{doc.faithfulness_score !== undefined && doc.faithfulness_score !== null ? `${doc.faithfulness_score}%` : '0%'}</span>
                       </span>
                     </td>
                     <td className="px-6 py-4 text-slate-500 text-xs">

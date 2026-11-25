@@ -7,6 +7,7 @@ from app.database.models import Clause, Document, Page, QASession, Claim, Citati
 from app.retrieval.hybrid import HybridRetriever
 from app.generation.engine import generate_verifiable_answer
 from app.verification.gate import run_verification_gate
+from app.verification.scoring import build_evidence_score_object
 from app.schemas.query import QueryRequest
 from app.intelligence.temporal_parser import extract_as_of_date
 from app.intelligence.amendments import resolve_temporal_lineage_for_query
@@ -187,11 +188,23 @@ async def ask_question(
     edges = res_edges.scalars().all()
     has_version_chain = len(edges) > 0 or len(version_chain) > 0
 
+    # 10. Multi-signal evidence grounding and confidence score object
+    score_obj = build_evidence_score_object(
+        gate_result=gate_result,
+        query=req.query,
+        answer=english_answer,
+        retrieved_quotes=filtered_quotes,
+        is_fallback=gen_result.get("is_fallback", True),
+        generation_provider=gen_result.get("generation_provider", "extractive-fallback"),
+        has_version_chain=has_version_chain,
+        as_of_date=str(eff_as_of_date) if eff_as_of_date else None
+    )
+
     session = QASession(
         query_text=req.query,
         answer_text=final_answer,
         status=gate_result["status"],
-        faithfulness_score=gate_result["faithfulness_score"],
+        faithfulness_score=score_obj["faithfulness_score"] if score_obj["faithfulness_score"] is not None else 0.0,
         as_of_date=eff_as_of_date
     )
     db.add(session)
@@ -227,11 +240,23 @@ async def ask_question(
         "query": req.query,
         "answer": final_answer,
         "as_of_date": str(eff_as_of_date),
-        "status": gate_result["status"],
-        "faithfulness_score": gate_result["faithfulness_score"],
-        "generated_count": gate_result["total_claims"],
-        "verified_count": gate_result["verified_count"],
-        "blocked_count": gate_result["blocked_count"],
+        "status": score_obj["status"],
+        "faithfulness_score": score_obj["faithfulness_score"],
+        "score_details": score_obj,
+        "claims_generated": score_obj["claims_generated"],
+        "claims_verified": score_obj["claims_verified"],
+        "claims_blocked": score_obj["claims_blocked"],
+        "generation_pass_rate": score_obj["generation_pass_rate"],
+        "evidence_strength": score_obj["evidence_strength"],
+        "coverage": score_obj["coverage"],
+        "relevance": score_obj["relevance"],
+        "confidence_band": score_obj["confidence_band"],
+        "confidence_reason": score_obj["confidence_reason"],
+        "grounding": score_obj["grounding"],
+        "mode_label": score_obj["mode_label"],
+        "generated_count": score_obj["claims_generated"],
+        "verified_count": score_obj["claims_verified"],
+        "blocked_count": score_obj["claims_blocked"],
         "verified_claims": gate_result["verified_claims"],
         "blocked_claims": gate_result["blocked_claims"],
         "calculation": gen_result.get("calculation"),
