@@ -1,0 +1,373 @@
+[
+  {
+    "id": "T01",
+    "category": "temporal",
+    "question": "Are foreclosure charges banned on floating rate loans to individuals?",
+    "as_of": "2024-02-01",
+    "expected": "No. Only a non-binding DRAFT exists (SYN_01); nothing is in force.",
+    "expected_sources": [
+      "SYN_01"
+    ],
+    "feature": "temporal / draft handling"
+  },
+  {
+    "id": "T02",
+    "category": "temporal",
+    "question": "Are foreclosure charges banned on floating rate loans to individuals?",
+    "as_of": "2024-06-01",
+    "expected": "Not yet. Final directions (SYN_02) were issued 12 Mar 2024 but take effect 1 Oct 2024.",
+    "expected_sources": [
+      "SYN_02 para 4.1"
+    ],
+    "feature": "future effective date"
+  },
+  {
+    "id": "T03",
+    "category": "temporal",
+    "question": "Are foreclosure charges banned on floating rate loans to individuals?",
+    "as_of": "2024-11-01",
+    "expected": "Not yet. The effective date was extended from 1 Oct 2024 to 1 Jan 2025 (SYN_03).",
+    "expected_sources": [
+      "SYN_03 para 2.1",
+      "SYN_02 para 4.1"
+    ],
+    "feature": "extension circular"
+  },
+  {
+    "id": "T04",
+    "category": "temporal",
+    "question": "Are foreclosure charges banned on floating rate loans to individuals?",
+    "as_of": "2025-02-01",
+    "expected": "Yes, in force since 1 Jan 2025 (SYN_02 para 3.1 as extended by SYN_03). Answer must show the version chain.",
+    "expected_sources": [
+      "SYN_02 para 3.1",
+      "SYN_03 para 2.1"
+    ],
+    "feature": "version chain"
+  },
+  {
+    "id": "T05",
+    "category": "temporal",
+    "question": "Does the foreclosure ban apply to micro and small enterprise loans?",
+    "as_of": "2025-02-01",
+    "expected": "No. The MSE amendment (SYN_04) is not effective until 1 Jun 2025.",
+    "expected_sources": [
+      "SYN_04 para 2.2"
+    ],
+    "feature": "partial amendment, future date"
+  },
+  {
+    "id": "T06",
+    "category": "temporal",
+    "question": "Does the foreclosure ban apply to MSE loans with a limit of Rs. 50 lakh?",
+    "as_of": "2025-07-01",
+    "expected": "Yes, from 1 Jun 2025, for floating rate term loans with a sanctioned limit up to Rs. 50,00,000 (SYN_04 para 2.1). All other paragraphs inherited from SYN_02.",
+    "expected_sources": [
+      "SYN_04 para 2.1",
+      "SYN_04 para 3.1"
+    ],
+    "feature": "partial amendment inherits baseline"
+  },
+  {
+    "id": "T07",
+    "category": "temporal",
+    "question": "What is the cap on documentation charges for retail loans?",
+    "as_of": "2025-01-01",
+    "expected": "Rs. 5,000 per loan account (SYN_05 para 1.1), in force since 1 Nov 2023.",
+    "expected_sources": [
+      "SYN_05 para 1.1"
+    ],
+    "feature": "in-force circular"
+  },
+  {
+    "id": "T08",
+    "category": "temporal",
+    "question": "What is the cap on documentation charges for retail loans?",
+    "as_of": "2025-07-15",
+    "expected": "No cap. The circular was withdrawn on 30 Jun 2025 (SYN_06). Banks follow their Board policy.",
+    "expected_sources": [
+      "SYN_06 para 1.1"
+    ],
+    "feature": "withdrawn document"
+  },
+  {
+    "id": "C01",
+    "category": "contradiction",
+    "question": "Do any bank documents conflict with the regulator on processing fee?",
+    "as_of": "2024-05-01",
+    "expected": "Yes. SYN_08 clause 6.1 (2.0%) conflicts with SYN_07 para 2.1 (max 1.0%), effective 1 Apr 2024. Status: unresolved.",
+    "expected_sources": [
+      "SYN_07 para 2.1",
+      "SYN_08 clause 6.1"
+    ],
+    "feature": "contradiction detection"
+  },
+  {
+    "id": "C02",
+    "category": "contradiction",
+    "question": "Do any bank documents conflict with the regulator on processing fee?",
+    "as_of": "2024-08-01",
+    "expected": "The SYN_08 vs SYN_07 conflict is resolved by amendment: SYN_09 revised clause 6.1 to 1.0% from 1 Jul 2024. Should appear under auto-resolved.",
+    "expected_sources": [
+      "SYN_09 para 1.2"
+    ],
+    "feature": "resolved by amendment"
+  },
+  {
+    "id": "C03",
+    "category": "contradiction",
+    "question": "Is the XYZ Finance 2.5% processing fee a conflict with the regulator cap?",
+    "as_of": "2024-08-01",
+    "expected": "No. The regulator cap (SYN_07 para 1.1) applies to Scheduled Commercial Banks, not NBFCs. Show as 'different scope, not a conflict'.",
+    "expected_sources": [
+      "SYN_07 para 1.1",
+      "SYN_10 para 2.1"
+    ],
+    "feature": "scope-aware contradiction"
+  },
+  {
+    "id": "C04",
+    "category": "contradiction",
+    "question": "Does the home loan agreement foreclosure charge conflict with the regulator?",
+    "as_of": "2025-02-01",
+    "expected": "Yes. SYN_11 clause 8.2 (2.0% foreclosure) conflicts with SYN_02 para 3.1 (as extended by SYN_03). Agreement is floating rate, individual borrower.",
+    "expected_sources": [
+      "SYN_11 clause 8.2",
+      "SYN_02 para 3.1"
+    ],
+    "feature": "agreement vs circular"
+  },
+  {
+    "id": "C05",
+    "category": "contradiction",
+    "question": "Does the personal loan agreement foreclosure charge conflict with the regulator?",
+    "as_of": "2025-02-01",
+    "expected": "No. SYN_12 is a fixed rate loan; fixed rate loans are not covered (SYN_02 para 3.2). Show as different scope.",
+    "expected_sources": [
+      "SYN_12 clause 6.1",
+      "SYN_02 para 3.2"
+    ],
+    "feature": "scope-aware contradiction"
+  },
+  {
+    "id": "C06",
+    "category": "contradiction",
+    "question": "Does the MSE business loan agreement's foreclosure charge conflict with the regulator?",
+    "as_of": "2025-07-01",
+    "expected": "Advanced. Directions cover MSE loans from 1 Jun 2025 but apply to loans sanctioned or renewed on/after the effective date (SYN_02 para 3.3). SYN_13 renews 1 Nov 2025, so it becomes non-compliant at renewal; no conflict before then.",
+    "expected_sources": [
+      "SYN_13 clause 6.1",
+      "SYN_04 para 2.1",
+      "SYN_02 para 3.3"
+    ],
+    "feature": "temporal + scope"
+  },
+  {
+    "id": "C07",
+    "category": "contradiction",
+    "question": "Does the MSE Lending Policy foreclosure clause conflict with the regulator?",
+    "as_of": "2025-07-01",
+    "expected": "Yes. SYN_17 clause 5.3 (2.0% on floating rate MSE loans up to Rs. 50 lakh) conflicts with SYN_04 para 2.1 from 1 Jun 2025.",
+    "expected_sources": [
+      "SYN_17 clause 5.3",
+      "SYN_04 para 2.1"
+    ],
+    "feature": "policy vs amendment"
+  },
+  {
+    "id": "C08",
+    "category": "contradiction",
+    "question": "Does the bank KFS policy conflict with the regulator?",
+    "as_of": "2024-08-01",
+    "expected": "Yes. SYN_08 clause 7.1 (KFS on request) conflicts with SYN_14 para 1.1 (KFS before execution, no request needed), effective 1 Jul 2024.",
+    "expected_sources": [
+      "SYN_14 para 1.1",
+      "SYN_08 clause 7.1"
+    ],
+    "feature": "contradiction detection"
+  },
+  {
+    "id": "C09",
+    "category": "contradiction",
+    "question": "Does the bank KFS policy conflict with the regulator?",
+    "as_of": "2024-05-01",
+    "expected": "No conflict yet. SYN_14 is not effective until 1 Jul 2024.",
+    "expected_sources": [
+      "SYN_14 para 2.1"
+    ],
+    "feature": "temporal gating of conflicts"
+  },
+  {
+    "id": "C10",
+    "category": "contradiction",
+    "question": "Does the digital lending cooling-off period in the bank policy comply?",
+    "as_of": "2024-10-01",
+    "expected": "No. SYN_15 clause 1.1 gives 1 day; SYN_16 para 1.1 requires at least 3 days, effective 1 Sep 2024.",
+    "expected_sources": [
+      "SYN_15 clause 1.1",
+      "SYN_16 para 1.1"
+    ],
+    "feature": "contradiction detection"
+  },
+  {
+    "id": "K01",
+    "category": "calculation",
+    "question": "Home loan: overdue Rs. 50,000 for 30 days. What is the penal interest?",
+    "as_of": "2025-02-01",
+    "expected": "Rs. 123.29 (50,000 x 3.0% x 30/365) per SYN_11 clause 7.1. The calculation card should show inputs and formula.",
+    "expected_sources": [
+      "SYN_11 clause 7.1"
+    ],
+    "feature": "deterministic calculation"
+  },
+  {
+    "id": "K02",
+    "category": "calculation",
+    "question": "What is the processing fee on a Rs. 10,00,000 retail loan?",
+    "as_of": "2024-08-01",
+    "expected": "Rs. 10,000 (1.0% of sanctioned amount, minimum Rs. 1,000), per SYN_09 revised clause 6.1. NOT 2.0%.",
+    "expected_sources": [
+      "SYN_09 para 1.2"
+    ],
+    "feature": "calculation with temporal resolution"
+  },
+  {
+    "id": "R01",
+    "category": "parsing_ocr",
+    "question": "How many free ATM transactions per month, and what is the charge beyond the limit?",
+    "as_of": "2024-06-01",
+    "expected": "Five free transactions per month; maximum Rs. 21 per transaction beyond that (SYN_19, scanned file, OCR required).",
+    "expected_sources": [
+      "SYN_19 paras 1-2"
+    ],
+    "feature": "OCR"
+  },
+  {
+    "id": "R02",
+    "category": "parsing_watermark",
+    "question": "What late payment fee does the credit card draft propose?",
+    "as_of": "2024-06-01",
+    "expected": "1.5% per month of the overdue amount, minimum Rs. 100, but it is a DRAFT and not in force (SYN_20). DRAFT/CONFIDENTIAL watermark text must not appear in the quote.",
+    "expected_sources": [
+      "SYN_20 para 1.1"
+    ],
+    "feature": "watermark filtering + draft"
+  },
+  {
+    "id": "R03",
+    "category": "parsing_multipage",
+    "question": "How long does the Internal Ombudsman have to decide, and how long does the Principal Nodal Officer have to respond?",
+    "as_of": "2024-10-01",
+    "expected": "Internal Ombudsman: 30 calendar days of reference (SYN_21 para 3.2). Principal Nodal Officer: 15 calendar days (para 2.1).",
+    "expected_sources": [
+      "SYN_21 paras 2.1, 3.2"
+    ],
+    "feature": "multi-page clauses"
+  },
+  {
+    "id": "R04",
+    "category": "parsing_table",
+    "question": "What is the cheque return charge on loan repayments?",
+    "as_of": "2025-02-01",
+    "expected": "Rs. 500 per instrument (SYN_22 Table 1).",
+    "expected_sources": [
+      "SYN_22 Table 1"
+    ],
+    "feature": "table extraction"
+  },
+  {
+    "id": "R05",
+    "category": "parsing_numbers",
+    "question": "What is the minimum loan amount and the effective date in the number-format circular?",
+    "as_of": "2024-06-01",
+    "expected": "Minimum Rs. 1,50,000 (Rupees one lakh fifty thousand); effective 1 April 2024. The guardrail must accept all equivalent forms (1st April, 2024 / 01/04/2024 / April 1, 2024).",
+    "expected_sources": [
+      "SYN_24 paras 1.1, 3.1"
+    ],
+    "feature": "number/date consistency"
+  },
+  {
+    "id": "R06",
+    "category": "parsing_metadata",
+    "question": "How often must collateral for secured loans above Rs. 10 lakh be revalued?",
+    "as_of": "2024-06-01",
+    "expected": "Every 3 years (SYN_25). Document has no issuer, date or reference number: the metadata/trust scanner should flag it.",
+    "expected_sources": [
+      "SYN_25"
+    ],
+    "feature": "missing metadata"
+  },
+  {
+    "id": "R07",
+    "category": "retrieval_long_doc",
+    "question": "Within how many days must original title documents be released after full repayment, and what is the compensation?",
+    "as_of": "2024-06-01",
+    "expected": "Within 30 days; compensation Rs. 5,000 per day of delay (SYN_26 para 7.1). Must retrieve the right section from a 4-page document.",
+    "expected_sources": [
+      "SYN_26 para 7.1"
+    ],
+    "feature": "retrieval / ranking"
+  },
+  {
+    "id": "R08",
+    "category": "retrieval_long_doc",
+    "question": "During what hours may recovery agents contact borrowers?",
+    "as_of": "2024-06-01",
+    "expected": "Not before 8:00 AM or after 7:00 PM (SYN_26 para 5.1).",
+    "expected_sources": [
+      "SYN_26 para 5.1"
+    ],
+    "feature": "retrieval / ranking"
+  },
+  {
+    "id": "A01",
+    "category": "abstention",
+    "question": "What is the interest rate on gold loans?",
+    "as_of": "2025-02-01",
+    "expected": "ABSTAIN: no document covers gold loans.",
+    "expected_sources": [],
+    "feature": "abstention"
+  },
+  {
+    "id": "A02",
+    "category": "abstention",
+    "question": "Does the bank offer crop insurance?",
+    "as_of": "2025-02-01",
+    "expected": "ABSTAIN: no evidence.",
+    "expected_sources": [],
+    "feature": "abstention"
+  },
+  {
+    "id": "A03",
+    "category": "isolation",
+    "question": "How many days of earned leave do employees get?",
+    "as_of": "2025-02-01",
+    "expected": "24 days per calendar year (SYN_27). Must not mix in loan documents.",
+    "expected_sources": [
+      "SYN_27 para 1.1"
+    ],
+    "feature": "retrieval isolation"
+  },
+  {
+    "id": "F01",
+    "category": "counterfactual",
+    "question": "What if the home loan had been taken on 1 Dec 2024 instead? Would the foreclosure ban apply?",
+    "as_of": "2024-12-01 (hypothetical)",
+    "expected": "Counterfactual date change: the ban takes effect 1 Jan 2025, so on 1 Dec 2024 it would not yet be in force. Must be labelled hypothetical; show before and after.",
+    "expected_sources": [
+      "SYN_03 para 2.1"
+    ],
+    "feature": "counterfactual: date"
+  },
+  {
+    "id": "F02",
+    "category": "counterfactual",
+    "question": "What if the overdue amount were Rs. 80,000 for 45 days?",
+    "as_of": "2025-02-01 (hypothetical)",
+    "expected": "Rs. 295.89 (80,000 x 3.0% x 45/365). Must be labelled hypothetical.",
+    "expected_sources": [
+      "SYN_11 clause 7.1"
+    ],
+    "feature": "counterfactual: numbers"
+  }
+]

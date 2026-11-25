@@ -41,6 +41,7 @@ export interface DocumentItem {
   status: IngestionStatus;
   page_count: number;
   clause_count: number;
+  faithfulness_score?: number;
   doc_status?: DocStatus;
   created_at: string;
   updated_at: string;
@@ -307,6 +308,34 @@ export interface SystemHealth {
   database: string;
   vector_store: string;
   storage_writable: boolean;
+  llm?: {
+    provider: string;
+    model: string;
+    base_url: string;
+    api_key_configured: boolean;
+    api_key_status: string;
+    status: string;
+    details: string;
+    reachable?: boolean;
+  };
+}
+
+export interface LLMHealth {
+  provider: string;
+  model: string;
+  base_url: string;
+  api_key_configured: boolean;
+  api_key_status: string;
+  status: string;
+  details: string;
+  reachable?: boolean;
+}
+
+export interface QueryRequest {
+  query: string;
+  document_ids?: string[];
+  as_of_date?: string;
+  response_language?: 'auto' | 'en' | 'hi';
 }
 
 export interface AskResponse {
@@ -314,7 +343,7 @@ export interface AskResponse {
   query: string;
   answer: string;
   status: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'CONFLICTED' | 'INSUFFICIENT_EVIDENCE';
-  faithfulness_score: number;
+  faithfulness_score?: number | null;
   generated_count: number;
   verified_count: number;
   blocked_count: number;
@@ -324,6 +353,85 @@ export interface AskResponse {
   conflict_found?: boolean;
   conflict_subject?: string | null;
   has_version_chain?: boolean;
+  as_of_date?: string | null;
+  temporal_guidance?: string | null;
+  requested_language?: string;
+  detected_language?: string;
+  answer_language?: string;
+  translation_status?: 'translated' | 'not_needed' | 'unavailable' | string;
+  translator?: string | null;
+  english_answer?: string | null;
+  english_query?: string | null;
+  score_details?: {
+    status: string;
+    is_abstained: boolean;
+    generation_mode: 'llm' | 'extractive';
+    mode_label: string;
+    grounding: 'verified_nli' | 'by_construction' | 'none';
+    claims_generated: number;
+    claims_verified: number;
+    claims_blocked: number;
+    generation_pass_rate: number | null;
+    evidence_strength: {
+      mean: number | null;
+      min: number | null;
+      verifier: string;
+      label: string;
+    } | null;
+    coverage: {
+      score: number;
+      elements_present: string[];
+      elements_required: string[];
+      missing_elements: string[];
+    };
+    relevance: {
+      score: number;
+      is_low_relevance: boolean;
+      warning: string | null;
+      top_clause_score: number;
+      subject_match: boolean;
+    };
+    confidence_band: 'HIGH' | 'MEDIUM' | 'LOW' | 'INSUFFICIENT';
+    confidence_reason: string;
+    faithfulness_score: number | null;
+  };
+  claims_generated?: number;
+  claims_verified?: number;
+  claims_blocked?: number;
+  generation_pass_rate?: number | null;
+  evidence_strength?: {
+    mean: number | null;
+    min: number | null;
+    verifier: string;
+    label: string;
+  } | null;
+  coverage?: {
+    score: number;
+    elements_present: string[];
+    elements_required: string[];
+    missing_elements: string[];
+  };
+  relevance?: {
+    score: number;
+    is_low_relevance: boolean;
+    warning: string | null;
+    top_clause_score: number;
+    subject_match: boolean;
+  };
+  confidence_band?: 'HIGH' | 'MEDIUM' | 'LOW' | 'INSUFFICIENT';
+  confidence_reason?: string;
+  grounding?: string;
+  generation_mode?: 'llm' | 'extractive';
+  mode_label?: string;
+  version_chain?: Array<{
+    document_name: string;
+    document_type?: string;
+    clause_number?: string;
+    publication_date?: string;
+    effective_date?: string;
+    status: string;
+    description?: string;
+  }>;
   verified_claims: Array<{
     text: string;
     verdict?: string;

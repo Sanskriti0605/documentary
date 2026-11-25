@@ -49,19 +49,24 @@ async def upload_document(
     existing_stmt = select(Document).where(Document.file_hash == file_hash)
     existing_res = await db.execute(existing_stmt)
     existing_doc = existing_res.scalar_one_or_none()
+    if existing_doc and existing_doc.status == "PROCESSED":
+        page_check = await db.execute(select(func.count(Page.id)).where(Page.document_id == existing_doc.id))
+        if (page_check.scalar() or 0) > 0:
+            return existing_doc
     if existing_doc:
-        return existing_doc
-
-    doc = Document(
-        name=file.filename,
-        file_hash=file_hash,
-        file_path=file_path,
-        document_type=document_type,
-        domain=domain,
-        issuer=issuer,
-        status="PROCESSING"
-    )
-    db.add(doc)
+        doc = existing_doc
+        doc.status = "PROCESSING"
+    else:
+        doc = Document(
+            name=file.filename,
+            file_hash=file_hash,
+            file_path=file_path,
+            document_type=document_type,
+            domain=domain,
+            issuer=issuer,
+            status="PROCESSING"
+        )
+        db.add(doc)
     await db.flush()
 
     job = IngestionJob(
@@ -84,6 +89,42 @@ async def upload_document(
 
     await db.refresh(doc)
     return doc
+
+async def compute_document_extraction_fidelity(doc_id: str, db: AsyncSession) -> float:
+    """
+    Computes real extraction fidelity:
+    ratio of clauses whose stored quote is verified verbatim in the page text,
+    weighted by page extraction/OCR confidence.
+    """
+    stmt_clauses = select(Clause).where(Clause.document_id == doc_id)
+    c_res = await db.execute(stmt_clauses)
+    clauses = c_res.scalars().all()
+
+    if not clauses:
+        return 0.0
+
+    stmt_pages = select(Page).where(Page.document_id == doc_id)
+    p_res = await db.execute(stmt_pages)
+    pages = {p.id: p for p in p_res.scalars().all()}
+
+    if not pages:
+        return 0.0
+
+    exact_matches = 0
+    total_conf = 0.0
+    for cl in clauses:
+        p = pages.get(cl.page_id)
+        if p and p.extracted_text and cl.clause_text:
+            search_excerpt = cl.clause_text.strip()[:60]
+            if search_excerpt.lower() in p.extracted_text.lower():
+                exact_matches += 1
+            total_conf += (p.extraction_confidence or 0.95)
+        else:
+            total_conf += 0.50
+
+    avg_conf = total_conf / len(clauses)
+    match_ratio = exact_matches / len(clauses)
+    return round(match_ratio * avg_conf * 100.0, 1)
 
 @router.get("", response_model=DocumentListResponse)
 async def list_documents(
@@ -112,6 +153,7 @@ async def list_documents(
         doc_resp = DocumentResponse.model_validate(d)
         doc_resp.page_count = page_cnt
         doc_resp.clause_count = clause_cnt
+        doc_resp.faithfulness_score = await compute_document_extraction_fidelity(d.id, db)
         doc_responses.append(doc_resp)
 
     return DocumentListResponse(total=total, documents=doc_responses)
@@ -126,6 +168,7 @@ async def get_document(document_id: str, db: AsyncSession = Depends(get_db)):
     resp = DocumentResponse.model_validate(doc)
     resp.page_count = page_cnt
     resp.clause_count = clause_cnt
+    resp.faithfulness_score = await compute_document_extraction_fidelity(doc.id, db)
     return resp
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

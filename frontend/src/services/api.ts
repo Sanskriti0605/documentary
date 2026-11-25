@@ -27,6 +27,10 @@ export const systemService = {
     const res = await api.get<SystemHealth>('/health');
     return res.data;
   },
+  getLLMHealth: async (checkConnectivity: boolean = false): Promise<any> => {
+    const res = await api.get<any>(`/health/llm?check_connectivity=${checkConnectivity}`);
+    return res.data;
+  },
   getAnalytics: async (): Promise<AnalyticsStats> => {
     const res = await api.get<AnalyticsStats>('/analytics');
     return res.data;
@@ -76,20 +80,54 @@ export const pdfService = {
   getPdfInfo: async (
     docNameOrId: string
   ): Promise<{
+    document_id?: string;
+    document_name?: string;
     page_count: number;
     pages: Array<{ page_number: number; width: number; height: number }>;
   }> => {
     const res = await api.get(`/pdf/${encodeURIComponent(docNameOrId)}/info`);
     return res.data;
   },
+
+  getQuoteBoxes: async (
+    docNameOrId: string,
+    quote: string,
+    page: number = 1,
+    bbox?: string
+  ): Promise<{
+    found: boolean;
+    page_number: number;
+    boxes: number[][];
+    is_multiline: boolean;
+    cross_page?: {
+      is_cross_page: boolean;
+      continues_on_page?: number | null;
+      continued_from_page?: number | null;
+      continuation_quote?: string;
+    } | null;
+    warning?: string | null;
+    document_id?: string;
+    document_name?: string;
+  }> => {
+    const res = await api.get(`/pdf/${encodeURIComponent(docNameOrId)}/quote-boxes`, {
+      params: { quote, page, bbox }
+    });
+    return res.data;
+  },
 };
 
 export const askService = {
-  ask: async (query: string, documentIds?: string[], asOfDate?: string): Promise<AskResponse> => {
+  ask: async (
+    query: string,
+    documentIds?: string[],
+    asOfDate?: string,
+    responseLanguage?: 'auto' | 'en' | 'hi'
+  ): Promise<AskResponse> => {
     const res = await api.post<AskResponse>('/ask', {
       query,
       document_ids: documentIds,
       as_of_date: asOfDate,
+      response_language: responseLanguage,
     });
     return res.data;
   },

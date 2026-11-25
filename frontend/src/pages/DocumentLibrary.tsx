@@ -6,7 +6,8 @@ import {
   Filter,
   Trash2,
   Eye,
-  AlertCircle
+  AlertCircle,
+  ShieldCheck
 } from 'lucide-react';
 import { documentService } from '../services/api';
 import { DocumentItem } from '../types';
@@ -202,6 +203,7 @@ export const DocumentLibrary: React.FC = () => {
                 <th className="px-6 py-3.5">Ingestion</th>
                 <th className="px-6 py-3.5">Pages</th>
                 <th className="px-6 py-3.5">Clauses</th>
+                <th className="px-6 py-3.5">Extraction Fidelity</th>
                 <th className="px-6 py-3.5">Upload Date</th>
                 <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
@@ -209,13 +211,13 @@ export const DocumentLibrary: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-400">
                     Loading documents...
                   </td>
                 </tr>
               ) : filteredDocuments.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-400">
                     No documents found. Click "Upload PDF Documents" to add lending policies and circulars.
                   </td>
                 </tr>
@@ -246,6 +248,18 @@ export const DocumentLibrary: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-slate-600 font-medium">{doc.page_count}</td>
                     <td className="px-6 py-4 text-slate-600 font-medium">{doc.clause_count}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center space-x-1 text-xs font-bold px-2 py-0.5 rounded-full ${
+                        (doc.faithfulness_score ?? 0) >= 70
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : (doc.faithfulness_score ?? 0) > 0
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : 'bg-slate-100 text-slate-500 border border-slate-200'
+                      }`}>
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>{doc.faithfulness_score !== undefined && doc.faithfulness_score !== null ? `${doc.faithfulness_score}%` : '0%'}</span>
+                      </span>
+                    </td>
                     <td className="px-6 py-4 text-slate-500 text-xs">
                       {new Date(doc.created_at).toLocaleDateString()}
                     </td>

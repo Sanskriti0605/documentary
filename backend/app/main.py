@@ -58,6 +58,10 @@ app.include_router(pdf_viewer.router, prefix=api_prefix)
 app.include_router(ask.router)
 app.include_router(evaluation.router)
 app.include_router(pdf_viewer.router)
+app.include_router(system.router)
+app.include_router(system.router, prefix="/api")
+app.include_router(documents.router)
+app.include_router(documents.router, prefix="/api")
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

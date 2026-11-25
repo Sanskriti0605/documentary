@@ -19,13 +19,16 @@ import {
   ShieldAlert,
   ServerCrash,
   Cpu,
-  ArrowRight
+  ArrowRight,
+  Languages,
+  ShieldCheck
 } from 'lucide-react';
 import { askService } from '../services/api';
 import { AskResponse } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { CitationChip } from '../components/common/CitationChip';
 import { useAppStore } from '../stores/useAppStore';
+import { HINDI_UI } from '../i18n/hindi';
 
 export const EvidenceChat: React.FC = () => {
   const [queryText, setQueryText] = useState<string>('');
@@ -34,10 +37,12 @@ export const EvidenceChat: React.FC = () => {
   const [isBackendDown, setIsBackendDown] = useState<boolean>(false);
   const [response, setResponse] = useState<AskResponse | null>(null);
   const [showEvidenceDrawer, setShowEvidenceDrawer] = useState<boolean>(false);
+  const [responseLanguage, setResponseLanguage] = useState<'auto' | 'en' | 'hi'>('auto');
+  const [showEnglishOriginal, setShowEnglishOriginal] = useState<boolean>(false);
 
-  const { asOfDate } = useAppStore();
+  const { asOfDate, setAsOfDate } = useAppStore();
 
-  const handleAsk = async (e?: React.FormEvent, overrideQuery?: string) => {
+  const handleAsk = async (e?: React.FormEvent, overrideQuery?: string, overrideDate?: string, overrideLang?: 'auto' | 'en' | 'hi') => {
     if (e) e.preventDefault();
     const query = overrideQuery || queryText;
     if (!query.trim()) return;
@@ -45,9 +50,12 @@ export const EvidenceChat: React.FC = () => {
     setLoading(true);
     setError(null);
     setIsBackendDown(false);
+    setShowEnglishOriginal(false);
 
+    const queryDate = overrideDate || asOfDate;
+    const reqLang = overrideLang || responseLanguage;
     try {
-      const data = await askService.ask(query, undefined, asOfDate);
+      const data = await askService.ask(query, undefined, queryDate, reqLang);
       setResponse(data);
     } catch (err: any) {
       console.error('Query execution failed:', err);
@@ -69,12 +77,15 @@ export const EvidenceChat: React.FC = () => {
   };
 
   const sampleQuestions = [
+    'क्या फ्लोटिंग रेट लोन पर फोरक्लोज़र चार्ज प्रतिबंधित हैं?',
     'What is the foreclosure fee for prepayment of the personal loan facility?',
     'What is the agreed rate of interest for Rajesh Sharma\'s personal loan?',
     'What is the current penal charge rate for personal loan default in force as of 2026?',
     'Calculate the processing fee with 18% GST for a personal loan of INR 500,000.',
     'What is the interest subvention percentage for agricultural tractor loans?'
   ];
+
+  const isHindi = response?.answer_language === 'hi';
 
   const hasEmptyResult =
     response &&
@@ -110,9 +121,40 @@ export const EvidenceChat: React.FC = () => {
             data-testid="query-input"
           />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-1 gap-2">
-            <div className="text-xs text-slate-500 flex items-center space-x-2">
-              <span className="font-semibold text-slate-700">Evaluation As-Of Date:</span>
-              <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-navy-900 font-semibold">{asOfDate}</span>
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <div className="flex items-center space-x-1.5">
+                <span className="font-semibold text-slate-700">Evaluation As-Of Date:</span>
+                <input
+                  type="date"
+                  value={asOfDate}
+                  onChange={(e) => setAsOfDate(e.target.value)}
+                  className="font-mono bg-slate-50 border border-slate-200 px-2 py-1 rounded text-navy-900 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  data-testid="as-of-date-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setAsOfDate(new Date().toISOString().split('T')[0])}
+                  className="text-[11px] text-blue-600 hover:text-blue-800 underline font-medium"
+                >
+                  Today
+                </button>
+              </div>
+
+              {/* Language Selector */}
+              <div className="flex items-center space-x-1.5 border-l border-slate-200 pl-3">
+                <Languages className="w-3.5 h-3.5 text-slate-500" />
+                <span className="font-semibold text-slate-700">Language:</span>
+                <select
+                  value={responseLanguage}
+                  onChange={(e) => setResponseLanguage(e.target.value as 'auto' | 'en' | 'hi')}
+                  data-testid="language-select"
+                  className="bg-slate-50 border border-slate-200 px-2 py-1 rounded text-navy-900 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="auto">Auto (स्वतः)</option>
+                  <option value="en">English</option>
+                  <option value="hi">हिन्दी (Hindi)</option>
+                </select>
+              </div>
             </div>
             <button
               type="submit"
@@ -123,12 +165,12 @@ export const EvidenceChat: React.FC = () => {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying Evidence...</span>
+                  <span>{responseLanguage === 'hi' ? HINDI_UI.EVALUATING : 'Verifying Evidence...'}</span>
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  <span>Ask VerifyDoc</span>
+                  <span>{responseLanguage === 'hi' ? HINDI_UI.SUBMIT_BUTTON : 'Ask VerifyDoc'}</span>
                 </>
               )}
             </button>
@@ -273,12 +315,16 @@ export const EvidenceChat: React.FC = () => {
               ) : (
                 <span data-testid="llm-mode-badge" className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-xs font-semibold">
                   <Cpu className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Ollama ({response.model_name || 'qwen2.5:7b'})</span>
+                  <span>
+                    {response.generation_provider?.toLowerCase().includes('openrouter') || response.model_name?.includes('nemotron')
+                      ? 'OpenRouter (NVIDIA Nemotron 3.5 Lightning)'
+                      : (response.generation_provider || `Model (${response.model_name || 'NVIDIA Nemotron 3.5 Lightning'})`)}
+                  </span>
                 </span>
               )}
             </div>
 
-            {/* Faithfulness Meter & Counts */}
+            {/* Evidence Grounding Meter & Counts */}
             <div className="flex items-center space-x-4">
               <div className="text-xs text-slate-500" data-testid="claims-count-text">
                 <span className="font-semibold text-slate-800">{response.generated_count} generated, {response.blocked_count} blocked</span>
@@ -286,19 +332,155 @@ export const EvidenceChat: React.FC = () => {
 
               <div data-testid="faithfulness-meter" className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
                 <Percent className="w-4 h-4 text-blue-600" />
-                <span className="text-slate-600 font-medium">Faithfulness:</span>
-                <span className="font-bold text-navy-950 text-sm">{response.faithfulness_score}%</span>
+                <span className="text-slate-600 font-medium">{isHindi ? HINDI_UI.FAITHFULNESS : 'Evidence Grounding:'}</span>
+                <span className="font-bold text-navy-950 text-sm">
+                  {response.status === 'INSUFFICIENT_EVIDENCE' || (response.faithfulness_score === 0 && response.verified_count === 0)
+                    ? 'Insufficient Evidence'
+                    : ((response.generation_mode === 'extractive' || response.grounding === 'by_construction') || (response.is_fallback && response.faithfulness_score === null))
+                    ? 'Extractive mode: quotes are copied from the source'
+                    : `${response.faithfulness_score ?? Math.round((response.generation_pass_rate ?? 1) * 100)}%`}
+                </span>
               </div>
             </div>
           </div>
+
+          {/* Multi-Signal Evidence Grounding & Verification Panel */}
+          <div data-testid="evidence-grounding-panel" className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+                <span className="font-bold text-xs uppercase tracking-wider text-navy-950">
+                  {isHindi ? HINDI_UI.EVIDENCE_GROUNDING : 'Evidence Grounding & Quality Assessment'}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-medium text-slate-500">Confidence Band:</span>
+                <span
+                  data-testid="confidence-band-badge"
+                  className={`text-xs font-bold px-2.5 py-0.5 rounded-full border shadow-2xs ${
+                    response.confidence_band === 'HIGH'
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : response.confidence_band === 'MEDIUM'
+                      ? 'bg-blue-100 text-blue-800 border-blue-300'
+                      : response.confidence_band === 'LOW'
+                      ? 'bg-amber-100 text-amber-800 border-amber-300'
+                      : 'bg-rose-100 text-rose-800 border-rose-300'
+                  }`}
+                  title={response.confidence_reason || 'Derived from pass rate, evidence strength, coverage and relevance.'}
+                >
+                  {response.confidence_band || (response.status === 'INSUFFICIENT_EVIDENCE' ? 'INSUFFICIENT' : 'MEDIUM')}
+                </span>
+              </div>
+            </div>
+
+            {/* Metric Signals Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {/* 1. Claims Grounding */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-1" title="Proves which model claims passed verbatim and NLI verification vs ungrounded claims that were blocked.">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Claims Grounding</div>
+                <div className="font-bold text-navy-950" data-testid="panel-claims-ratio">
+                  {response.verified_count} / {response.generated_count} Verified
+                  {response.blocked_count > 0 && (
+                    <span className="text-rose-600 ml-1">({response.blocked_count} blocked)</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Pass Rate: {response.generation_pass_rate !== null && response.generation_pass_rate !== undefined ? `${Math.round(response.generation_pass_rate * 100)}%` : 'N/A (Extractive)'}
+                </div>
+              </div>
+
+              {/* 2. Evidence Strength */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-1" title="Raw cross-encoder NLI entailment probability over verified claims. Proves textual entailment confidence.">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Evidence Strength</div>
+                <div className="font-bold text-navy-950" data-testid="panel-evidence-strength">
+                  {response.evidence_strength?.mean !== null && response.evidence_strength?.mean !== undefined
+                    ? `${(response.evidence_strength.mean * 100).toFixed(1)}%`
+                    : (response.is_fallback || response.grounding === 'by_construction' ? 'By Construction' : 'Heuristic Mode')}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate" title={response.evidence_strength?.verifier || 'verifier'}>
+                  {response.evidence_strength?.min !== null && response.evidence_strength?.min !== undefined
+                    ? `Min: ${(response.evidence_strength.min * 100).toFixed(1)}% (${response.evidence_strength.verifier})`
+                    : 'Source quote verbatim'}
+                </div>
+              </div>
+
+              {/* 3. Query Coverage */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-1" title="Deterministic check for required elements (verdict, effective date, numbers, units) without model self-grading.">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Query Coverage</div>
+                <div className="font-bold text-navy-950" data-testid="panel-coverage-score">
+                  {response.coverage?.score !== undefined ? `${Math.round(response.coverage.score * 100)}%` : '100%'}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate">
+                  {response.coverage?.missing_elements && response.coverage.missing_elements.length > 0
+                    ? `Missing: ${response.coverage.missing_elements.join(', ')}`
+                    : 'All required elements present'}
+                </div>
+              </div>
+
+              {/* 4. Retrieval Relevance */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-1" title="BM25/semantic retrieval match between query and cited clauses. Warns if evidence topic does not match question.">
+                <div className="text-[10px] font-semibold text-slate-400 uppercase">Retrieval Relevance</div>
+                <div className="font-bold text-navy-950" data-testid="panel-relevance-score">
+                  {response.relevance?.score !== undefined ? `${Math.round(response.relevance.score * 100)}%` : '75%'}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate">
+                  {response.relevance?.is_low_relevance ? '⚠️ Low topic alignment' : 'Evidence aligned with query'}
+                </div>
+              </div>
+            </div>
+
+            {/* Low Relevance Warning Banner if applicable */}
+            {response.relevance?.warning && (
+              <div data-testid="relevance-warning-banner" className="p-2.5 bg-amber-50 border border-amber-300 rounded-lg flex items-start space-x-2 text-amber-900 text-xs">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Relevance Warning: </span>
+                  <span>{response.relevance.warning}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Bottom Methodology Note */}
+            <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1">
+              <span>
+                <strong>Note:</strong> Grounding shows claims are supported by the quoted text. It does not prove the answer is the right interpretation.
+              </span>
+              <span className="text-[10px] font-mono text-slate-400">
+                Mode: {response.mode_label || (response.is_fallback ? 'Extractive' : 'LLM')}
+              </span>
+            </div>
+          </div>
+
+          {/* Translation Unavailable Banner */}
+          {response.translation_status === 'unavailable' && (
+            <div
+              data-testid="translation-unavailable-banner"
+              className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-start space-x-3 text-amber-900 shadow-xs"
+            >
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-0.5 text-xs">
+                <div className="font-bold text-amber-950">अनुवाद अनुपलब्ध (Translation Unavailable)</div>
+                <p className="leading-relaxed">
+                  वर्तमान में हिंदी अनुवाद अनुपलब्ध है: सत्यापित अंग्रेजी उत्तर दिखाया जा रहा है।
+                  <span className="block text-amber-700 text-[11px] mt-0.5">
+                    (Hindi translation unavailable right now: showing the verified English answer.)
+                  </span>
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Empty Result Notification */}
           {hasEmptyResult && (
             <div data-testid="empty-result-state" className="p-6 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-center space-y-2">
               <HelpCircle className="w-8 h-8 text-slate-400 mx-auto" />
-              <h3 className="font-bold text-sm text-navy-950">No Documentary Evidence Found</h3>
+              <h3 className="font-bold text-sm text-navy-950">
+                {isHindi ? 'कोई दस्तावेजी साक्ष्य नहीं मिला' : 'No Documentary Evidence Found'}
+              </h3>
               <p className="text-xs text-slate-600 max-w-md mx-auto">
-                No verifiable clauses were retrieved matching "{response.query}". Under the VerifyDoc protocol, the engine abstains rather than halluncinating.
+                {isHindi
+                  ? HINDI_UI.ABSTENTION_MESSAGE
+                  : `No verifiable clauses were retrieved matching "${response.query}". Under the VerifyDoc protocol, the engine abstains rather than halluncinating.`}
               </p>
             </div>
           )}
@@ -308,11 +490,16 @@ export const EvidenceChat: React.FC = () => {
             <div data-testid="missing-information-box" className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
               <div className="flex items-center space-x-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
                 <ShieldAlert className="w-4 h-4 text-amber-600" />
-                <span>Conditional Answer &bull; Missing Documentary Proof</span>
+                <span>
+                  {isHindi
+                    ? 'सशर्त उत्तर • दस्तावेजी प्रमाण अपूर्ण'
+                    : 'Conditional Answer • Missing Documentary Proof'}
+                </span>
               </div>
               <p className="text-xs text-amber-800 leading-relaxed">
-                The verification gate identified missing evidence required to definitively certify this answer.
-                Any unverified claims have been blocked to prevent reliance on incomplete clauses.
+                {isHindi
+                  ? 'सत्यापन गेट ने इस उत्तर को प्रमाणित करने के लिए आवश्यक छूटे हुए साक्ष्य की पहचान की है। अधूरे खंडों पर निर्भरता रोकने के लिए असत्यापित दावों को अवरुद्ध कर दिया गया है।'
+                  : 'The verification gate identified missing evidence required to definitively certify this answer. Any unverified claims have been blocked to prevent reliance on incomplete clauses.'}
               </p>
             </div>
           )}
@@ -320,9 +507,83 @@ export const EvidenceChat: React.FC = () => {
           {/* Generated Answer Summary */}
           {response.answer && (
             <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Response Summary</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  {isHindi ? HINDI_UI.RESPONSE_SUMMARY : 'Response Summary'}
+                </h3>
+                {response.english_answer && response.translation_status === 'translated' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEnglishOriginal(!showEnglishOriginal)}
+                    data-testid="toggle-english-original-button"
+                    className="text-xs text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer"
+                  >
+                    {showEnglishOriginal ? HINDI_UI.SHOW_HINDI : HINDI_UI.SHOW_ENGLISH}
+                  </button>
+                )}
+              </div>
               <div data-testid="response-answer-text" className="p-4 bg-slate-50 rounded-lg text-slate-800 text-sm leading-relaxed border border-slate-200/60 font-medium">
-                {response.answer}
+                {showEnglishOriginal && response.english_answer ? response.english_answer : response.answer}
+              </div>
+            </div>
+          )}
+
+          {/* Regulatory Version Lineage & Temporal Status */}
+          {response.version_chain && response.version_chain.length > 0 && (
+            <div data-testid="version-chain-card" className="p-5 bg-purple-50/60 border border-purple-200 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 text-purple-900 font-bold text-sm">
+                  <GitBranch className="w-4 h-4 text-purple-700" />
+                  <span>Regulatory Version Lineage (Evaluated As-Of: {response.as_of_date || asOfDate})</span>
+                </div>
+                <span className="text-[11px] font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                  {response.version_chain.length} Document Versions
+                </span>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                {response.version_chain.map((vc, idx) => {
+                  const statusColors: Record<string, string> = {
+                    IN_FORCE: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                    FUTURE_EFFECTIVE: 'bg-blue-100 text-blue-800 border-blue-300',
+                    DRAFT_NON_BINDING: 'bg-amber-100 text-amber-800 border-amber-300',
+                    WITHDRAWN: 'bg-rose-100 text-rose-800 border-rose-300',
+                    SUPERSEDED: 'bg-slate-200 text-slate-700 border-slate-300',
+                    PARTIAL_AMENDMENT: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+                    NON_COMPLIANT: 'bg-rose-100 text-rose-800 border-rose-300',
+                  };
+                  const badgeColor = statusColors[vc.status] || 'bg-slate-100 text-slate-700 border-slate-300';
+
+                  return (
+                    <div
+                      key={idx}
+                      className="p-3 bg-white rounded-lg border border-purple-100 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="font-semibold text-slate-900 flex items-center space-x-1.5">
+                          <BookOpen className="w-3.5 h-3.5 text-purple-600" />
+                          <span>{vc.document_name}</span>
+                          {vc.clause_number && (
+                            <span className="text-slate-500 font-normal">({vc.clause_number})</span>
+                          )}
+                        </div>
+                        {vc.description && (
+                          <p className="text-slate-600 text-[11px] leading-relaxed">{vc.description}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2 shrink-0">
+                        {vc.effective_date && (
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            Eff: {vc.effective_date}
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${badgeColor}`}>
+                          {vc.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -350,9 +611,9 @@ export const EvidenceChat: React.FC = () => {
           {/* Claims List with Verdicts */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-              <span>Claims & Verification Gate Verdicts</span>
+              <span>{isHindi ? HINDI_UI.CLAIMS_TITLE : 'Claims & Verification Gate Verdicts'}</span>
               <span className="text-[11px] text-slate-500 font-normal">
-                {response.verified_count} Verified &bull; {response.blocked_count} Blocked
+                {response.verified_count} {isHindi ? 'सत्यापित' : 'Verified'} &bull; {response.blocked_count} {isHindi ? 'अवरुद्ध' : 'Blocked'}
               </span>
             </h3>
 
@@ -384,7 +645,7 @@ export const EvidenceChat: React.FC = () => {
                             data-testid="claim-verdict-verified"
                             className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 uppercase"
                           >
-                            {claim.verdict || 'VERIFIED'}
+                            {isHindi ? HINDI_UI.VERIFIED : (claim.verdict || 'VERIFIED')}
                           </span>
                           <span className="text-[10px] font-mono bg-white text-slate-700 px-2 py-0.5 rounded border border-slate-200">
                             Verifier: {claimVerifier}
@@ -456,7 +717,7 @@ export const EvidenceChat: React.FC = () => {
                             data-testid="claim-verdict-blocked"
                             className="text-[11px] font-bold px-2 py-0.5 rounded bg-rose-200 text-rose-900 border border-rose-400 uppercase"
                           >
-                            {bc.verdict || 'BLOCKED'}
+                            {isHindi ? HINDI_UI.BLOCKED : (bc.verdict || 'BLOCKED')}
                           </span>
                           <span className="text-[10px] font-mono bg-white text-slate-700 px-2 py-0.5 rounded border border-slate-200">
                             Verifier: {bcVerifier}

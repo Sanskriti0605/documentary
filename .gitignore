@@ -16,6 +16,7 @@ build/
 .npm/
 
 # Storage (root and backend/)
+storage/*.db
 storage/uploads/*
 !storage/uploads/.gitkeep
 storage/rendered/*

@@ -20,7 +20,7 @@ describe('EvidenceChat Component', () => {
     verified_count: 2,
     blocked_count: 1,
     generation_provider: 'ollama-qwen2.5',
-    is_fallback: true,
+    is_fallback: false,
     model_name: 'qwen2.5:7b',
     conflict_found: true,
     conflict_subject: 'Foreclosure Penal Charges',

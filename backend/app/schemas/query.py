@@ -31,7 +31,9 @@ class ClaimResponse(BaseModel):
 class QueryRequest(BaseModel):
     query: str = Field(..., description="The user question to be answered with evidence")
     document_ids: Optional[List[str]] = Field(default=None, description="Optional filter of document IDs to query against")
-    as_of_date: Optional[date] = Field(default=None, description="Temporal reference date for rule applicability")
+    as_of_date: Optional[Any] = Field(default=None, description="Temporal reference date for rule applicability")
+    as_of: Optional[Any] = Field(default=None, description="Alternative alias for as_of_date")
+    response_language: Optional[str] = Field(default="auto", description="Target response language: 'auto', 'en', or 'hi'")
 
 class QueryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -40,10 +42,32 @@ class QueryResponse(BaseModel):
     query: str
     answer: str
     status: str
-    faithfulness_score: float
+    faithfulness_score: Optional[float] = None
     as_of_date: Optional[date] = None
     claims: List[ClaimResponse] = []
+    version_chain: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
+    requested_language: Optional[str] = "auto"
+    detected_language: Optional[str] = "en"
+    answer_language: Optional[str] = "en"
+    translation_status: Optional[str] = "not_needed"
+    translator: Optional[str] = "none"
+    english_answer: Optional[str] = None
+    english_query: Optional[str] = None
+
+    # Comprehensive multi-signal evidence grounding
+    score_details: Optional[Dict[str, Any]] = None
+    claims_generated: Optional[int] = None
+    claims_verified: Optional[int] = None
+    claims_blocked: Optional[int] = None
+    generation_pass_rate: Optional[float] = None
+    evidence_strength: Optional[Dict[str, Any]] = None
+    coverage: Optional[Dict[str, Any]] = None
+    relevance: Optional[Dict[str, Any]] = None
+    confidence_band: Optional[str] = None
+    confidence_reason: Optional[str] = None
+    grounding: Optional[str] = None
+    mode_label: Optional[str] = None
 
 class EvidenceDetailResponse(BaseModel):
     session_id: str
